@@ -5,13 +5,29 @@
     "url": "https://github.com/itgenius-au"
   },
   "metadata": {
-    "description": "Public Claude Code skills from itGenius. Starts with review-tools: get a second opinion on your code, plans, and decisions from other frontier models."
+    "description": "Public Claude Code skills from itGenius: multi-model review, safe build and deploy, git hygiene, session workflow, and copy humanizing.",
+    "version": "1.0.0"
   },
   "plugins": [
     {
-      "name": "review-tools",
-      "source": "./plugins/review-tools",
-      "description": "Second-opinion code/plan/decision review via Codex (GPT), Gemini, and z.ai (GLM), plus a multi-round AI debate that makes three models argue to consensus."
+      "name": "skills-library",
+      "source": "./",
+      "strict": false,
+      "description": "itGenius's public Claude Code skills: multi-model code review (Codex, Gemini, GLM + debate), safe build and deploy gates, git cleanup, branch finishing, session wrap, and AI-copy humanizing.",
+      "skills": [
+        "./skills/codex-review",
+        "./skills/gemini-review",
+        "./skills/zai-review",
+        "./skills/ai-debate",
+        "./skills/auto-build",
+        "./skills/quick-build",
+        "./skills/deploy-safely",
+        "./skills/cleanup-git",
+        "./skills/finish-branch",
+        "./skills/repo-health-sweep",
+        "./skills/session-wrap",
+        "./skills/copy-humanizer"
+      ]
     }
   ]
 }

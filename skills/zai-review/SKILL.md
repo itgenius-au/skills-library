@@ -357,7 +357,7 @@ signal than any one alone.
 /zai-review code                       # review uncommitted changes (inline the diff)
 /zai-review code src/main.py           # review a specific file
 /zai-review decision "Firestore -> Postgres?"
-/zai-review plan docs/plans/2026-...md
+/zai-review plan docs/plans/my-plan.md
 /zai-review build                      # audit branch vs main
 /zai-review codebase "the auth module"
 /zai-review coding "add retry/backoff to the upload client"   # GLM drafts, primary agent applies + verifies
