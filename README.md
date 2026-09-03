@@ -3,75 +3,82 @@
 Public [Claude Code](https://docs.claude.com/en/docs/claude-code) skills from
 **[itGenius](https://itgenius.com)**.
 
-This marketplace starts with one plugin, **`review-tools`**: get a second
-opinion on your code, plans, and decisions from a *different* frontier model.
-Claude is good, but a fundamentally different model catches blind spots Claude
-misses. These skills run Codex, Gemini, and z.ai (GLM) headlessly, then let
-Claude synthesize the findings, so disagreements between models become your
-strongest signal.
+One plugin, one `skills/` directory. It bundles the skills we use every day: get
+a second opinion from other frontier models, build and ship behind real safety
+gates, keep git tidy, wrap a session cleanly, and strip the AI tells out of your
+writing.
 
 ## Install
 
-```
+```text
 /plugin marketplace add itgenius-au/skills-library
-/plugin install review-tools@skills-library
+/plugin install skills-library@skills-library
 ```
 
 Restart Claude Code (or start a new session) so the skills load.
 
-## What's inside: `review-tools`
+## What's inside
+
+**Multi-model review** - a different model catches blind spots yours misses.
 
 | Skill | What it does |
 |---|---|
-| **codex-review** | Runs OpenAI's Codex CLI as a second reviewer for code, plans, decisions, or a build. |
-| **gemini-review** | Runs Google's Gemini CLI as a second reviewer, with live Google Search grounding. |
-| **zai-review** | Calls z.ai's GLM models over HTTP as a third reviewer, or offloads a coding task to GLM. |
-| **ai-debate** | Orchestrates a 3-round debate between Claude, Gemini, and Codex: independent review, challenge disputes, then synthesize to consensus. |
+| `codex-review` | Runs OpenAI's Codex CLI as a second reviewer for code, plans, decisions, or a build. |
+| `gemini-review` | Runs Google's Gemini CLI as a second reviewer, with live Google Search grounding. |
+| `zai-review` | Calls z.ai's GLM models over HTTP as a third reviewer, or offloads a coding task to GLM. |
+| `ai-debate` | Runs a 3-round debate between Claude, Gemini, and Codex: independent review, challenge disputes, then synthesize to consensus. |
 
-Each review skill runs in five modes: `code`, `decision`, `plan`, `build`, and
-`codebase`.
+**Build and ship** - a rigorous method with real gates.
+
+| Skill | What it does |
+|---|---|
+| `quick-build` | Build and ship ONE small feature end to end in a session: worktree, TDD, multi-model review, safe deploy, browser verification. |
+| `auto-build` | Drive a plan to a push-ready branch, unattended: build per phase, verify, triple-review to clean, stop at the human gate. |
+| `deploy-safely` | Production deploy gates: build-then-deploy-by-digest, served-image integrity, ancestor gate, rollback pointer, deploy record. |
+
+**Git and workflow** - keep the repo and the session clean.
+
+| Skill | What it does |
+|---|---|
+| `cleanup-git` | Audit and safely clean up branches, worktrees, wip commits, and diverged main. Nothing is destroyed without proof no work is lost. |
+| `finish-branch` | Decide how to integrate finished work (merge, PR, or cleanup), with a clean-tree gate first. |
+| `repo-health-sweep` | Run every repo's own gates, produce one health map, and optionally auto-fix the fixable into push-ready branches. |
+| `session-wrap` | End or pause a working session: summarize, capture docs, handle git state, leave clear pickup instructions. |
+
+**Writing**
+
+| Skill | What it does |
+|---|---|
+| `copy-humanizer` | Strip AI fingerprints from copy, blog posts, and email so it reads like a person wrote it. |
 
 ## Prerequisites
 
 You only need the tools for the skills you use.
 
-- **codex-review**: the Codex CLI (`npm install -g @openai/codex`) signed in to a
-  ChatGPT account (`codex login`).
-- **gemini-review** and **ai-debate**: the Gemini CLI
+- **Review skills** (`codex-review`, `ai-debate`): the Codex CLI
+  (`npm install -g @openai/codex`) signed in with `codex login`.
+- **`gemini-review`, `ai-debate`**: the Gemini CLI
   (`npm install -g @google/gemini-cli`) plus a Gemini API key from
-  [Google AI Studio](https://aistudio.google.com/apikey), provided as the
-  `GEMINI_API_KEY` env var.
-- **zai-review**: a z.ai API key (a GLM Coding Plan or pay-as-you-go balance),
-  provided as the `ZAI_API_KEY` env var. See [z.ai/subscribe](https://z.ai/subscribe).
+  [Google AI Studio](https://aistudio.google.com/apikey) as `GEMINI_API_KEY`.
+- **`zai-review`**: a z.ai API key (GLM Coding Plan or pay-as-you-go) as
+  `ZAI_API_KEY`. See [z.ai/subscribe](https://z.ai/subscribe).
+- **Build/deploy skills**: adapt the deploy examples (Cloud Run, static, file
+  hosts) to your own stack. They call the review skills above for their review
+  gates.
 
 Keys come from your own env or secret manager. Nothing here hard-codes a key.
 
-## Use it
+## A note on the build and deploy skills
 
-Trigger a skill by asking in plain language, or call it directly:
-
-```
-/codex-review code                       # review uncommitted changes
-/gemini-review plan docs/my-plan.md      # critique a plan
-/zai-review decision "Postgres vs Firestore?"
-/ai-debate build                         # 3-model audit of a branch vs main
-```
-
-Claude picks the skill automatically when you say things like "get a second
-opinion on this", "have Codex review my changes", or "run an AI debate on this
-decision".
-
-## Why multiple models
-
-One model reviewing its own kind of work has consistent blind spots. A different
-architecture, trained differently, flags different issues. Where two models
-agree, you can trust it. Where they disagree, that is exactly where a human
-should look. `ai-debate` formalizes this: it preserves minority opinions instead
-of averaging them away.
+`quick-build`, `auto-build`, and `deploy-safely` encode a specific, opinionated
+method. The gate concepts are general - TDD, multi-model review, build-by-digest,
+served-image integrity, an ancestor gate, a rollback pointer, a deploy record -
+but the deploy commands use one stack as the worked example. Treat them as a
+template to adapt, not a turnkey pipeline for every environment.
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep skills provider-accurate, avoid
+Issues and pull requests welcome. Keep skills provider-accurate, avoid
 hard-coding model versions or secrets, and match the existing SKILL.md style.
 
 ## License

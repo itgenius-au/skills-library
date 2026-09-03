@@ -1,0 +1,25 @@
+{
+  "name": "skills-library",
+  "version": "1.0.0",
+  "description": "itGenius's public Claude Code skills: multi-model code review (Codex, Gemini, GLM + debate), safe build and deploy gates, git cleanup, branch finishing, session wrap, and AI-copy humanizing.",
+  "author": {
+    "name": "itGenius",
+    "url": "https://github.com/itgenius-au"
+  },
+  "homepage": "https://github.com/itgenius-au/skills-library",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "skills",
+    "code-review",
+    "codex",
+    "gemini",
+    "glm",
+    "ai-debate",
+    "build",
+    "deploy",
+    "git",
+    "workflow",
+    "copy-humanizer"
+  ]
+}
