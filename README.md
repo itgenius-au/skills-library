@@ -1,4 +1,4 @@
-# itgenius-skills
+# skills-library
 
 Public [Claude Code](https://docs.claude.com/en/docs/claude-code) skills from
 **[itGenius](https://itgenius.com)**.
@@ -13,8 +13,8 @@ strongest signal.
 ## Install
 
 ```
-/plugin marketplace add itgenius-au/itgenius-skills
-/plugin install review-tools@itgenius-skills
+/plugin marketplace add itgenius-au/skills-library
+/plugin install review-tools@skills-library
 ```
 
 Restart Claude Code (or start a new session) so the skills load.
