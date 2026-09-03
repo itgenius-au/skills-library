@@ -19,6 +19,7 @@
         "./skills/gemini-review",
         "./skills/zai-review",
         "./skills/ai-debate",
+        "./skills/triple-review",
         "./skills/auto-build",
         "./skills/quick-build",
         "./skills/deploy-safely",
