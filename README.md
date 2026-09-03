@@ -26,6 +26,7 @@ Restart Claude Code (or start a new session) so the skills load.
 | `codex-review` | Runs OpenAI's Codex CLI as a second reviewer for code, plans, decisions, or a build. |
 | `gemini-review` | Runs Google's Gemini CLI as a second reviewer, with live Google Search grounding. |
 | `zai-review` | Calls z.ai's GLM models over HTTP as a third reviewer, or offloads a coding task to GLM. |
+| `triple-review` | Runs Codex, Gemini, and GLM over one focused diff at once, then reconciles into a single report. One shot, degrades gracefully. |
 | `ai-debate` | Runs a 3-round debate between Claude, Gemini, and Codex: independent review, challenge disputes, then synthesize to consensus. |
 
 **Build and ship** - a rigorous method with real gates.
