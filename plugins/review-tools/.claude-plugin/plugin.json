@@ -1,0 +1,20 @@
+{
+  "name": "review-tools",
+  "version": "1.0.0",
+  "description": "Second-opinion code/plan/decision review via Codex (GPT), Gemini, and z.ai (GLM), plus a multi-round AI debate. Have a different frontier model review your work and catch blind spots.",
+  "author": {
+    "name": "itGenius",
+    "url": "https://github.com/itgenius-au"
+  },
+  "homepage": "https://github.com/itgenius-au/itgenius-skills",
+  "license": "MIT",
+  "keywords": [
+    "code-review",
+    "codex",
+    "gemini",
+    "glm",
+    "second-opinion",
+    "multi-model",
+    "ai-debate"
+  ]
+}

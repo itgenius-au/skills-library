@@ -1,0 +1,17 @@
+{
+  "name": "itgenius-skills",
+  "owner": {
+    "name": "itGenius",
+    "url": "https://github.com/itgenius-au"
+  },
+  "metadata": {
+    "description": "Public Claude Code skills from itGenius. Starts with review-tools: get a second opinion on your code, plans, and decisions from other frontier models."
+  },
+  "plugins": [
+    {
+      "name": "review-tools",
+      "source": "./plugins/review-tools",
+      "description": "Second-opinion code/plan/decision review via Codex (GPT), Gemini, and z.ai (GLM), plus a multi-round AI debate that makes three models argue to consensus."
+    }
+  ]
+}
