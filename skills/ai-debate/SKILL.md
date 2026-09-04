@@ -152,7 +152,7 @@ cd "$PROJECT_DIR" && GEMINI_API_KEY="$KEY" gemini -p "$PROMPT" \
 
 ```bash
 # Codex (Bash call 2, run_in_background: true, timeout: 600000) — same flags as codex-review.
-codex exec --full-auto -C "$PROJECT_DIR" "$PROMPT" 2>/dev/null         # match your codex-review pin
+codex exec -s read-only -C "$PROJECT_DIR" "$PROMPT" 2>/dev/null         # match your codex-review pin
 ```
 
 **Note:** Round 1 sessions are preserved. Round 2 uses session resumption (`codex exec resume --last` and `gemini --resume latest`) so models retain their Round 1 context and can build on prior analysis.

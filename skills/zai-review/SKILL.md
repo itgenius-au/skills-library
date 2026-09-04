@@ -338,7 +338,7 @@ Run GLM alongside Codex and Gemini for three independent models on the same code
 ```bash
 GLM_OUT=$(glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT")
 GEMINI_OUT=$(GEMINI_API_KEY="$KEY" gemini -p "$PROMPT" --approval-mode yolo -m gemini-3.1-pro-preview -o text 2>/dev/null)
-CODEX_OUT=$(codex exec --full-auto -C "$DIR" "$PROMPT" 2>/dev/null)
+CODEX_OUT=$(codex exec -s read-only -C "$DIR" "$PROMPT" 2>/dev/null)
 # The primary agent synthesizes all three. Run them as parallel background calls.
 ```
 
