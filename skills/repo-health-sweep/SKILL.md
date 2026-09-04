@@ -16,13 +16,11 @@ Run every code repo's own gates, produce one health map, and (optionally) auto-f
 
 ## Flow
 
-1. **Discover targets:**
-   ```bash
-   scripts/repo-health-sweep/discover-targets.sh
-   ```
-   Emits the code repos with declared gates as JSON, excluding paused/skeleton/no-gate repos (e.g. paused projects, skeleton repos, empty CLAUDE.md).
+1. **Discover targets:** list the code repos that declare their own gates, excluding
+   paused / skeleton / no-gate repos (e.g. paused projects, skeleton repos, an empty
+   CLAUDE.md). A small discovery script that emits them as JSON keeps this repeatable.
 2. **Per repo, in an isolated worktree, bounded concurrency 3:**
-   - Run the gates: `scripts/auto-build/run-gates.sh "$REPO"`.
+   - Run the repo's own gates (lint, typecheck, tests, build).
    - `overall:pass` -> record green.
    - `overall:skip` -> record skipped (no gates).
    - `overall:fail`:
@@ -49,5 +47,5 @@ A gate run from a cold checkout fails on missing dependencies, not code (`uv run
 ## Relationship to other skills
 
 - `auto-build`: the engine this loop calls per failing repo.
-- `run-gates.sh`, `discover-targets.sh`: the shared helpers under `scripts/`.
+- a discovery step and a gate-runner: small helpers you provide for listing repos and running each repo's gates.
 - your other audit skills: candidates to become scheduled maintainer routines the same way.

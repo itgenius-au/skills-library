@@ -40,15 +40,19 @@ curl -sS https://api.z.ai/api/coding/paas/v4/chat/completions \
   | jq -r '.choices[0].message.content'
 ```
 
-Because you call this repeatedly, wrap it once in a small local helper — referred to below as
-`glm-exec.sh` — that encapsulates: the key load, the model pin, the endpoint choice, a generous
-`max_tokens`, passing a large prompt via a temp file (shell arg limits), and error classification
-(unfunded / auth / transient). Everything after this section uses `glm-exec.sh …` as shorthand for
-the curl above. A suggested contract:
+Because you call this repeatedly, **this skill ships that wrapper in its own directory**:
+`glm-exec.sh` (plus its stdlib `glm_call.py` helper). It encapsulates the key load, the model pin,
+the endpoint choice, a generous `max_tokens`, passing a large prompt via a temp file (shell arg
+limits), and error classification (unfunded / auth / transient). Everything after this section uses
+`glm-exec.sh …` as shorthand. **Call it by its path in this skill's base directory** (the
+`Base directory for this skill:` path shown when the skill loads):
 
 ```bash
-glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT"
+"$SKILL_DIR/glm-exec.sh" --model glm-5.2 --max-tokens 32000 -- "$PROMPT"
 ```
+
+It resolves your key automatically: `ZAI_API_KEY` from the env if set, else from your own secret
+manager. No local `.env`, no hard-coded key.
 
 ## Mandatory invocation rules (every call)
 
@@ -115,13 +119,17 @@ Plan bills through the `coding` endpoint (the default above).
 
 ### Key storage
 
-Store your z.ai key in your secret manager (e.g. GCP Secret Manager secret `zai-api-key`) or an
-env var; the wrapper fetches it automatically. To rotate, push a new key to the same secret.
+Set `ZAI_API_KEY` in the env, or store your z.ai key in your own secret manager; the bundled
+`glm-exec.sh` fetches it automatically. To rotate, push a new version to the same secret.
 
 ## Modes
 
 > Every example assumes the preamble is prepended and the context is assembled into `$PROMPT`.
-> Canonical call: `glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT"` (the curl above).
+> In every example, **`glm-exec.sh` is shorthand for `"$SKILL_DIR/glm-exec.sh"`** - the wrapper
+> bundled in THIS skill's base directory. It is NOT on your `$PATH`; always call it by that path
+> (`SKILL_DIR` = the "Base directory for this skill" path shown when the skill loads). For a large
+> diff, prefer `--prompt-file <file>` over `-- "$PROMPT"` to dodge argv size limits.
+> Canonical call: `"$SKILL_DIR/glm-exec.sh" --model glm-5.2 --max-tokens 32000 -- "$PROMPT"`.
 
 ### 1. Code Review (`code`)
 
@@ -341,7 +349,7 @@ signal than any one alone.
 ## Edge Cases
 
 - **Insufficient balance (code 1113)**: no Coding Plan / no balance. Fund at z.ai/subscribe — NOT a code finding.
-- **Auth error (401/403)**: bad/rotated key. Re-push `zai-api-key` to your secret manager.
+- **Auth error (401/403)**: bad/rotated key. Re-push your z.ai key to your secret manager (or reset `ZAI_API_KEY`).
 - **Truncated response**: hit `max_tokens` mid-answer — raise `max_tokens` and re-run.
 - **Empty / unparseable content**: 200 but no usable content / unexpected shape — dump the raw body and inspect.
 - **Transient failure (429-rate / 5xx / network)**: retry with backoff; if it persists, surface it — don't guess — and offer to fall back to Codex/Gemini.
