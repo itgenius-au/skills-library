@@ -1,7 +1,7 @@
 ---
 name: session-wrap
-description: "End a project working session cleanly: summarize work, capture durable documentation, handle git state, and leave clear pickup instructions."
-argument-hint: "[pause|done] [project-name]"
+description: "End or checkpoint a working session cleanly with three distinct intents - done (complete: integrate and close), pause (staying in this window), or pick up (window closing or compacting: hand off a self-sufficient resume prompt). Summarizes work, captures durable docs, and handles git state."
+argument-hint: "[done|pause|pick up] [project-name]"
 ---
 
 # Session Wrap
@@ -20,7 +20,7 @@ Identify the project from:
 - Files changed during the session.
 - The most recent context activation.
 
-If multiple projects were touched, handle each repo separately. Wrap nested repos before the parent repo that contains them.
+If multiple repos were touched, handle each separately. Wrap nested repos before the parent repo that contains them.
 
 Run:
 
@@ -48,20 +48,32 @@ If the session included production work, include exact deploy targets, revisions
 
 ## Step 3: Decide Wrap Intent
 
-Classify intent as:
+Three distinct intents, with different downstream behaviour. The key split is
+whether this window stays open:
 
-- **pause**: work continues later. Preserve branch and worktree.
-- **done**: work is complete. Prepare to integrate, push, and close the worktree if applicable.
+- **done**: work is complete. Integrate to the default branch and clean up
+  (worktree removed, branch pruned). The next session starts fresh.
+- **pause**: work continues in THIS window - you are staying, usually waiting on
+  something external. Make the work durable (commit and push) and keep the
+  worktree mounted, but do NOT clean up and do NOT emit a full resume prompt. The
+  open window keeps the context alive, so the full handoff would be wasted.
+- **pick up**: this window is CLOSING or being COMPACTED - work continues in a
+  future or freshly-compacted session. Preserve everything (worktree and branch
+  stay) and hand off a single copyable resume prompt. Write it to be
+  self-sufficient enough to survive a full window close, even when you expect to
+  resume right after compacting (a compact keeps only a little context).
 
 Infer from the user's words:
 
 | User wording | Intent |
 |---|---|
-| `pause`, `continue later`, `pick up later`, `for now` | pause |
 | `done`, `finished`, `close it out`, `ship it`, `merge it` | done |
-| `wrap up` without more detail | ask if worktree cleanup would be destructive |
+| `pause`, `hold`, `waiting on`, `keep the window open`, `standby` | pause |
+| `pick up`, `pickup`, `compact`, `continue later`, `new session`, `for now` | pick up |
+| `wrap up` with no qualifier | ask before proceeding (worktree cleanup is destructive) |
 
-When in doubt and a worktree exists, default to **pause**.
+When in doubt and a worktree exists, default to **pick up**, never done - never
+auto-delete a worktree. pick up and pause are both non-destructive.
 
 ## Step 4: Scan For Documentation Updates
 
@@ -169,6 +181,13 @@ Resume with: cd /path/to/project/.claude/worktrees/fix-auth-refresh
 Next: finish OAuth callback tests and rerun npm test.
 ```
 
+### If Intent Is Pick Up
+
+Also non-destructive: leave the worktree and branch mounted exactly as they are.
+The only difference from pause is the handoff - because the window is closing (or
+about to be compacted), Step 8 emits a full, copyable resume prompt instead of a
+short recap. Do not clean up, merge, or delete anything here.
+
 ### If Intent Is Done
 
 Before merging or deleting anything:
@@ -205,14 +224,51 @@ Stop immediately if any command fails. Do not continue cleanup after a failed me
 
 ## Step 8: Final Handoff
 
-Report:
+Branch on intent - the three modes end differently.
 
-- What changed.
-- Files or docs updated.
-- Tests and checks run.
-- Git branch and commit state.
-- Whether pushed or left local.
-- Worktree path if preserved.
-- Exact next steps.
+### done
 
-Keep the handoff short enough that another engineer can resume without reading the whole conversation.
+A readable close-out; there is nothing to resume. State the outcome, the
+branch/worktree disposition (merged and removed, or discarded), deploy state if
+relevant, and end with a one-line "next session starts fresh".
+
+### pause
+
+A short status recap, NOT a resume prompt - the window stays open and context is
+live. Say what was pushed, what docs were captured, and what you are waiting on,
+then the exact next action for when you resume.
+
+### pick up
+
+Emit ONE copyable, self-sufficient resume prompt as a single fenced block. It
+must let a fresh (or freshly-compacted) session continue without the prior
+context, so include: project, worktree path + branch, deployed/branch state,
+known blockers, the exact next steps, and any reference doc. Even when you expect
+to resume right after compacting, write it so it stands alone if the window is gone.
+
+Worktree mode:
+
+```text
+Activate <project> context with worktree as <wt-name>. Pick up from <date> session.
+State: worktree at <path> on branch <branch> - <commits ahead>, <clean/dirty>.
+Deployed: <what is live, if any>.
+Next steps:
+1. <highest priority>
+2. <second priority>
+Reference: <plan or doc, if any>
+```
+
+Single mode (no worktree):
+
+```text
+Activate <project> context. Pick up from <date> session.
+State: <what is deployed, what branch>.
+Next steps:
+1. <highest priority>
+2. <second priority>
+Reference: <plan or doc, if any>
+```
+
+Keep every handoff short enough that another engineer, or your next session, can
+resume without reading the whole conversation. For pick up, the copyable prompt
+must be one unbroken block, not split across prose.
