@@ -8,7 +8,7 @@ argument-hint: "[mode: code|decision|plan|build|codebase] [target: file path, br
 
 Runs Google's Gemini CLI (`gemini -p`) headlessly to get independent analysis from Gemini 3.1 Pro. Use this when you want a second pair of eyes - a fundamentally different model reviewing your work, catching blind spots, or stress-testing decisions.
 
-**Use the Gemini CLI's current flagship model.** At time of writing that is `-m gemini-3.1-pro-preview`; fall back to a stable release such as `gemini-2.5-pro`. Check the CLI or Google's model list for the current flagship.
+**Always use `-m gemini-3.1-pro-preview`** to ensure the latest flagship model is used. Fall back to `gemini-2.5-pro` if the preview is unavailable.
 
 ## When to Use
 
@@ -28,11 +28,15 @@ npm install -g @google/gemini-cli
 
 ### Authentication
 
-Get a Gemini API key from Google AI Studio. Provide it as an env var (from your own secret manager or shell):
+Provide your Gemini key via the `GEMINI_API_KEY` environment variable, or pull it from your own
+secret manager. Keep it out of source - no hard-coded key, no committed `.env`:
 
 ```bash
-export GEMINI_API_KEY=...   # e.g. loaded from your secret manager
+# From an env var you've set, or your own secret manager:
+GEMINI_API_KEY="${GEMINI_API_KEY:?set GEMINI_API_KEY in your env or secret manager}"
 ```
+
+A free Google AI Studio key works (1,000 req/day).
 
 ## Headless Execution Pattern
 
@@ -134,10 +138,12 @@ Parse the user's request to identify:
 
 If unclear, ask the user. Default to `code` mode reviewing uncommitted changes.
 
-### 2. Set the API Key
+### 2. Fetch API Key
+
+Resolve `GEMINI_API_KEY` from your env or your own secret manager (see Authentication above):
 
 ```bash
-export GEMINI_API_KEY=...   # from your own secret manager or shell
+GEMINI_API_KEY="${GEMINI_API_KEY:?set GEMINI_API_KEY in your env or secret manager}"
 ```
 
 ### 3. Build and Execute the Prompt
@@ -233,7 +239,7 @@ AI Studio API key free tier: 1,000 requests/day. Sufficient for review use cases
 ## Edge Cases
 
 - **Gemini not installed**: Install with `npm install -g @google/gemini-cli` and retry
-- **API key missing**: Set `GEMINI_API_KEY` from your own secret manager or shell
+- **API key missing**: set `GEMINI_API_KEY` in your env or fetch it from your own secret manager (see Authentication).
 - **Large codebase**: Scope to specific files/directories rather than whole-repo review
 - **Gemini disagrees with Claude**: Present both perspectives - the disagreement itself is valuable signal
 - **Gemini hallucinates file paths**: Cross-check all file:line references before presenting to user

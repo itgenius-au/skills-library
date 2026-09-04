@@ -1,23 +1,23 @@
 ---
 name: quick-build
-description: Build and ship ONE small, well-scoped feature end to end in a single session - worktree isolation, dated runbook doc kept updated throughout, triple review of the plan (Codex+Gemini+GLM) before any code, TDD, full local gates, adversarial multi-agent review, deploy-safely production gates, deploy-by-digest, and live browser verification via Claude in Chrome. Use whenever the user hands over a single concrete feature or UI tweak and wants it built AND shipped ("add a chip for X", "make this table sortable", "rename this and change what it counts", "build and deploy if the gates pass"). Triggers on - quick build, quickbuild, build and ship, ship this small change, small feature end to end, build this and deploy.
+description: Build and ship ONE small, well-scoped feature end to end in a single session - worktree isolation, dated runbook doc kept updated throughout, triple review of the plan (Codex+Gemini+GLM) before any code, TDD, full local gates, adversarial multi-agent review, deploy-safely production gates, deploy-by-digest, and live browser verification via Claude in Chrome that loops back to fix, re-review and redeploy if it catches a break. Use whenever the user hands over a single concrete feature or UI tweak and wants it built AND shipped ("add a chip for X", "make this table sortable", "rename this and change what it counts", "build and deploy if the gates pass"). Triggers on - quick build, quickbuild, build and ship, ship this small change, small feature end to end, build this and deploy.
 ---
 
 # Quick Build
 
 Ship one small feature idea from request to verified production, in one session,
-using rigorous building/testing/deploy practices. The whole point is *end to end*:
+using a rigorous building/testing/deploy method. The whole point is *end to end*:
 a quick build is not done when the code is written, or even when the deploy is
 green - it is done when the change has been watched working in a real browser on
 the production URL and the deploy record says so.
 
-> **This skill is the small-scope FAST PATH.** The shared build/ship gates it runs -
-> TDD, local gates, adversarial (triple/multi-model) review, worktree isolation,
-> deploy-safely, build-then-deploy-by-digest + Served-Image Integrity + ancestor gate,
-> browser verification, deploy record + merge - are the non-negotiable gates of a rigorous
-> build method; keep them in sync with your project's own build/deploy playbook if you have
-> one. The plan-driven path (migration / authz / multi-phase) routes out of quick-build via
-> the scope gate below - use `writing-plans` / `brainstorming` / `auto-build` for that.
+> **This skill is the small-scope FAST PATH.** The shared build/ship gates it runs
+> (TDD, local gates, adversarial review, deploy-safely, build-by-digest + integrity +
+> ancestor gate, browser verification, record + merge) are the non-negotiables of a
+> rigorous build method - the same gates apply on the plan-driven path (migration /
+> authz / multi-phase, which the scope gate below routes out of quick-build and into
+> `writing-plans` / `brainstorming` / `auto-build`). This skill owns the fast-path
+> mechanics; wire it to your project's own build/deploy playbook where one exists.
 
 > **Deploy is part of the job, not a separate approval.** Invoking Quick Build IS
 > the decision to ship on green. A request that fits the scope gate runs the FULL
@@ -45,10 +45,11 @@ touches several subsystems, STOP and say so - route to `writing-plans` /
 
 ## Phase 0 - Worktree + context
 
-- Work in an isolated git worktree, not your main checkout: create/enter one and
-  bind the session to it. Verify `git rev-parse --show-toplevel` IS the worktree
-  path before any edit, and address every file by the worktree path for the rest
-  of the session.
+- Work in an isolated worktree. If your setup has a context-switch skill that
+  creates the worktree, pushes the branch, and binds the session (via
+  EnterWorktree), use it; otherwise create the worktree yourself. Either way:
+  verify `git rev-parse --show-toplevel` IS the worktree path before any edit,
+  and address every file by the worktree path for the rest of the session.
 - Confirm today's date from the environment (`currentDate` or `date`) NOW - the
   runbook filename and every doc header depend on it. Never infer the date.
 
@@ -64,7 +65,7 @@ the worktree) with a `**Date:** YYYY-MM-DD` header and these sections:
 ## Decisions          <- semantics you chose + why (data-model grounding)
 ## Scout findings     <- where the code lives, patterns reused, key facts
 ## Build log          <- updated at each phase: tests red -> green, gates, review
-## Deploy             <- pointer to the docs/deployment.md entry + rollback
+## Deploy             <- pointer to the project's deploy-log entry + rollback
 ## Follow-ups
 ```
 
@@ -82,8 +83,8 @@ retrospectively at the end. Commit it with the feature.
 - Hunt for an existing precedent before inventing UI: the design system usually
   already has the pattern (e.g. `c-sortable`/`c-sort-button`/`c-sort-arrow` on
   the Devices page). Reusing it is both faster and the design-system rule.
-- Read the project's required docs (e.g. its design-system reference and any
-  architecture pointers in its CLAUDE.md).
+- Read the project's required docs (e.g. a design-system reference and any
+  architecture/rewrite pointers named in its CLAUDE.md).
 - Verify data-source assumptions in the backend code, not from memory (e.g.
   "does this endpoint return suspended users?" - grep the integration).
 
@@ -95,12 +96,13 @@ Gemini + GLM - BEFORE writing a line of code. A wrong semantic or an unverified
 data-source assumption caught here costs a paragraph edit; the same miss caught in
 the Phase 6 diff review costs a rebuild.
 
-- Run all three in parallel over the runbook file, each pointed at
-  `docs/plans/YYYY-MM-DD-<slug>-quick-build.md`: the `codex-review`,
-  `gemini-review`, and `zai-review` (GLM) skills. Ask each the same four
-  questions: is the chosen semantic correct against the data model; is any
-  data-source assumption still unverified; is the scope still inside the
-  quick-build gate; is anything material missing or wrong.
+- Invoke the **`triple-review`** skill in `plan` mode on the runbook
+  (`docs/plans/YYYY-MM-DD-<slug>-quick-build.md`). It fans Codex + Gemini + GLM
+  out in parallel and returns one synthesized, consensus-tagged verdict - no
+  hand-rolled fan-out. Ask it the same four questions: is the chosen semantic
+  correct against the data model; is any data-source assumption still unverified;
+  is the scope still inside the quick-build gate; is anything material missing or
+  wrong.
 - Cycle findings back INTO the plan, not into a debate. Adopt confirmed
   corrections, update the Decisions / Scout findings sections, and re-run a model
   only if a fix changed the approach materially. Record the review result (models
@@ -152,7 +154,7 @@ probes (and any `tests/test_probe_*_tmp.py`) into a `wip` commit mid-review. Run
 panel with `isolation: "worktree"` on each `agent()` call, or, if it must run in the
 session worktree, checkpoint-commit BEFORE launching it and, after it completes,
 require `git diff <checkpoint> --stat -- src tests` to list only your intended files
-before any gate, commit, or squash (revert strays with `git checkout <checkpoint> -- <file>`).
+before any gate, commit, or wip-squash (revert strays with `git checkout <checkpoint> -- <file>`).
 Never run Phase 5/7 gates while a panel is still running.
 
 ## Phase 7 - Deploy (gates decide, not optimism)
@@ -165,16 +167,16 @@ approval. The gates ARE the pass/fail criteria this autonomy runs on, so the
 "autonomous pipeline needs measurable pass/fail criteria" rule is satisfied by
 running them, not by a human sign-off. This is a deliberate, standing override
 of the global "confirm before deploy" guardrail, scoped to the quick-build flow
-only. (In some projects "deploy to production" = merge the branch to `main` and a
-CI pipeline deploys prod on that merge.)
+only. (Some projects deploy prod on merge via CI - there "deploy to production" =
+merge the branch to `main` and the pipeline ships prod on that merge.)
 
 Invoke the project's `deploy-safely` skill and run EVERY gate it names - origin
 safety, main sync (behind=0), local-main publication, wip-free range. Then the
-project's deploy recipe. For Cloud Run:
+project's deploy recipe. For a container target (e.g. Cloud Run):
 
-- Build-then-deploy-by-digest (`gcloud builds submit --tag <repo>:<slug>-<sha>`,
-  resolve the digest, deploy `--image <repo>@<digest> --no-traffic` with
-  `--labels=git-branch=...,git-sha=...`). Never `--source` for prod.
+- Build-then-deploy-by-digest (build a tagged image `<repo>:<slug>-<sha>`,
+  resolve the digest, deploy the image by `<repo>@<digest>` with no traffic and
+  `git-branch` / `git-sha` labels). Never deploy from source for prod.
 - Pre-flip verify on a revision tag URL: fetch the served bundle and grep for
   marker strings that ONLY the new build contains. Zero markers = wrong image.
 - Flip traffic, then the Served-Image Integrity gate: compare the built digest
@@ -182,8 +184,8 @@ project's deploy recipe. For Cloud Run:
   be a 0% tag entry, which reads as a false MISMATCH.
 - Smoke: prod URL 200 serving the new bundle + markers, backend /health canary,
   revision log review (zero warnings).
-- Record in `docs/deployment.md` (same entry style as prior records): revision,
-  sha, digest, markers, rollback pointer (`update-traffic <prev-rev>=100`),
+- Record in the project's deploy log (same entry style as prior records):
+  revision, sha, digest, markers, rollback pointer (`update-traffic <prev-rev>=100`),
   suite counts, review result, persona-pass status. Update the runbook Deploy
   section to point at it.
 - Push the branch, then publish production parity: `git push origin HEAD:main`.
@@ -222,16 +224,41 @@ tool - use it freely):
 - Verify each acceptance point of the ask by interacting, not just looking:
   click every new control, check counts/orders against what the data implies,
   screenshot evidence.
-- Update the deployment.md persona-pass line from OWED to DONE with what was
+- Update the deploy-log persona-pass line from OWED to DONE with what was
   verified. If no browser is available this session, record the pass as OWED
   (the standing convention) and say so in the final summary.
+- **If the browser pass surfaces a defect, do NOT wrap - go to Phase 9.** A
+  browser-caught break on the live page is a finding, not a footnote.
+
+## Phase 9 - Browser feedback loop (bounded)
+
+Phase 8 is a gate, not a formality. A browser-caught defect - a rendered break, a
+wrong count / order, a control that does nothing - is a real finding on LIVE
+production (Phase 7 already deployed and merged). Do NOT ship past it or log it as
+a "known issue". Loop back through the build and review stages:
+
+1. **Back to the build (Phase 4):** write a failing test that reproduces the
+   defect, confirm it fails for the right reason, then fix to green (TDD).
+2. **Re-run the local gates (Phase 5).**
+3. **Re-run the adversarial review (Phase 6)** over the new diff. If the fix
+   changed a semantic or a data-source assumption, re-check it the way Phase 3
+   did. Scale the panel to the size of the fix.
+4. **Redeploy (Phase 7)** through `deploy-safely` + build-by-digest. Production is
+   already serving the broken build, so a browser-caught defect is a redeploy now,
+   not a note for later.
+5. **Re-verify in the browser (Phase 8).**
+
+**Bounded: max 2 loop cycles.** If the defect survives 2 cycles, STOP: roll back to
+the previous good revision (`update-traffic <prev-rev>=100` - the rollback pointer
+in the deploy record), record the outstanding break in the runbook, and surface it
+to the user. Shipping a browser-broken page and walking away is never the outcome.
 
 ## Deploy contention - two quick-builds racing the same project
 
 The clobber risk is *tree omission*: flipping to an image whose git tree does not
 contain what production already serves. The **ancestor gate** (Phase 7, part of the
-integrity trio: build-by-digest + Served-Image Integrity + ancestor gate) is the
-invariant that prevents it - and it must **abort, not echo** (a `set -e` script with `|| exit 1`, flip physically
+build-then-deploy integrity checks - marker verify + Served-Image Integrity + ancestor)
+is the invariant that prevents it - and it must **abort, not echo** (a `set -e` script with `|| exit 1`, flip physically
 after the checks). Contention-specific operational rules:
 
 - Deploy from a pushed worktree branch, never through the shared main checkout.
@@ -243,13 +270,13 @@ after the checks). Contention-specific operational rules:
 - If `push origin HEAD:main` rejects, someone else pushed: merge `origin/main` and
   push again - your deploy is already serving and its sha is in the merge.
 - Known contention up front → prefer a deploy train (one session ships both branches).
-  Check the Claude Live Monitor for another active deploy before Phase 7.
+  Check whether another session is already deploying the project before Phase 7.
 - WordPress files have no revisions: deploy-safely's pull-live-and-diff gate is the
   equivalent invariant - live is the baseline, always.
 
 ## Wrap
 
 Final summary leads with what shipped and where, the verified evidence, the
-rollback pointer, and anything owed. Close out via `session-wrap` (squash your
-wip commits into one clean commit before pushing) as usual; the worktree merge
-to main already happened as part of Phase 7.
+rollback pointer, and anything owed. Close out via `session-wrap` (squashing your
+wip commits into one clean commit, e.g. `git reset --soft <base> && git commit`) as
+usual; the worktree merge to main already happened as part of Phase 7.

@@ -205,7 +205,7 @@ independent models is the floor for a real review, not the ceiling.
 /triple-review code                                  # uncommitted changes
 /triple-review code src/app/billing.ts               # a specific file
 /triple-review build                                 # this branch vs main (feature diff)
-/triple-review plan docs/plans/2026-09-02-thing.md   # a plan before building
+/triple-review plan docs/plans/my-plan.md          # a plan before building
 /triple-review decision "move the CDP from Firestore to Postgres"
 /triple-review doc ~/Downloads/share-transfer-484.md # a document before acting on it
 ```

@@ -37,7 +37,7 @@ to justify ~3 minutes and 4 CLI calls.**
 Same as the sibling review skills:
 - **Gemini CLI**: `npm install -g @google/gemini-cli`
 - **Codex CLI**: `npm install -g @openai/codex`
-- **Gemini API key**: stored in your secret manager (e.g. GCP Secret Manager secret `gemini-api-key`)
+- **Gemini API key**: `GEMINI_API_KEY` in your env or your own secret manager
 - **Codex auth**: OAuth cached at `~/.codex/auth.json` (run `codex login` if expired)
 
 ## The verification preamble
