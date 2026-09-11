@@ -26,6 +26,7 @@
         "./skills/cleanup-git",
         "./skills/finish-branch",
         "./skills/repo-health-sweep",
+        "./skills/machine-move",
         "./skills/session-wrap",
         "./skills/copy-humanizer"
       ]
