@@ -44,6 +44,7 @@ Restart Claude Code (or start a new session) so the skills load.
 | `cleanup-git` | Audit and safely clean up branches, worktrees, wip commits, and diverged main. Nothing is destroyed without proof no work is lost. |
 | `finish-branch` | Decide how to integrate finished work (merge, PR, or cleanup), with a clean-tree gate first. |
 | `repo-health-sweep` | Run every repo's own gates, produce one health map, and optionally auto-fix the fixable into push-ready branches. |
+| `machine-move` | Pre-flight audit before switching machines (find uncommitted/unpushed work and local-only state), then set up the new machine after cloning. |
 | `session-wrap` | End or pause a working session: summarize, capture docs, handle git state, leave clear pickup instructions. |
 
 **Writing**
