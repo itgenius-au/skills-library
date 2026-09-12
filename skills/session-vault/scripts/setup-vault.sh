@@ -56,7 +56,9 @@ safe_dir() {
 case "${HOME:-}" in /?*) ;; *) log "HOME is not a usable absolute path; refusing to run."; exit 1 ;; esac
 
 # --- config ---------------------------------------------------------------
-CONFIG_PATH="${SESSION_VAULT_CONFIG:-$HOME/.claude/session-vault.config.json}"
+# Resolve the config path THROUGH _vault.py so setup and the loader always agree
+# (the loader expands a leading ~ in $SESSION_VAULT_CONFIG; a literal path here would diverge).
+CONFIG_PATH="$(SV_DIR="$DIR" python3 -c 'import os, sys; sys.path.insert(0, os.environ["SV_DIR"]); import _vault; print(_vault._config_path())')"
 
 step "Config (${CONFIG_PATH})"
 if [ ! -f "$CONFIG_PATH" ]; then
@@ -71,23 +73,37 @@ if [ ! -f "$CONFIG_PATH" ]; then
       log "  no project entered; aborting."
       exit 1
     fi
+    # GCP project ids are lowercase letters, digits, and hyphens only. Reject anything
+    # else (this also blocks JSON-breaking characters like a double quote).
+    case "$NEW_BQ_PROJECT" in
+      *[!a-z0-9-]*) log "  invalid project id (allowed: lowercase letters, digits, hyphens); aborting."; exit 1 ;;
+    esac
     mkdir -p "$(dirname "$CONFIG_PATH")" || fail_exit "create $(dirname "$CONFIG_PATH")"
-    cat > "$CONFIG_PATH" <<CFGEOF
-{
-  "enabled": true,
-  "bq_project": "${NEW_BQ_PROJECT}",
-  "bq_dataset": "claude_memory_vault",
-  "heartbeat_enabled": false,
-  "backup_enabled": false,
-  "gcs_backup_bucket": "",
-  "sa_secret_name": "local-session-sync-sa-key",
-  "gcloud_config_dir": "~/.config/gcloud-vault",
-  "offset_state_dir": "~/.claude/hooks/.offsets",
-  "machine_name": ""
+    # Write via python's json.dump so the value is always serialized safely.
+    if SV_BQ_PROJECT="$NEW_BQ_PROJECT" SV_CONFIG_PATH="$CONFIG_PATH" python3 - <<'PYEOF'
+import json, os
+cfg = {
+    "enabled": True,
+    "bq_project": os.environ["SV_BQ_PROJECT"],
+    "bq_dataset": "claude_memory_vault",
+    "heartbeat_enabled": False,
+    "backup_enabled": False,
+    "gcs_backup_bucket": "",
+    "sa_secret_name": "local-session-sync-sa-key",
+    "gcloud_config_dir": "~/.config/gcloud-vault",
+    "offset_state_dir": "~/.claude/hooks/.offsets",
+    "machine_name": "",
 }
-CFGEOF
-    chmod 600 "$CONFIG_PATH" 2>/dev/null || true
-    log "  wrote ${CONFIG_PATH}"
+with open(os.environ["SV_CONFIG_PATH"], "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PYEOF
+    then
+      chmod 600 "$CONFIG_PATH" 2>/dev/null || true
+      log "  wrote ${CONFIG_PATH}"
+    else
+      fail_exit "write ${CONFIG_PATH}"
+    fi
   else
     log "  no config file found at ${CONFIG_PATH} and no terminal to prompt on."
     log "  Copy templates/session-vault.config.example.json to ${CONFIG_PATH}, set bq_project, and re-run."
