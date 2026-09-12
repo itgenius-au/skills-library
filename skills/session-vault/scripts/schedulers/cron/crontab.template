@@ -1,0 +1,17 @@
+# session-vault cron block. setup-vault.sh fills the tokens and installs these lines between
+# "# BEGIN session-vault" / "# END session-vault" markers in your crontab, so re-runs and
+# uninstall replace exactly this block and never touch unrelated cron entries.
+#
+# PATH and CLOUDSDK_CONFIG are set INLINE per job (cron runs each line via /bin/sh), so bq/gcloud
+# resolve under cron's minimal PATH and every job authenticates as the isolated vault SA. Times
+# are the machine's local timezone.
+#
+# Offset-flush self-heal (30 min before the bulk sync).
+30 11 * * * PATH=__PATH__ CLOUDSDK_CONFIG=__GCLOUD_CONFIG__ /usr/bin/env python3 __INSTALL_DIR__/vault-flush-offsets.py >> __LOG_DIR__/session-vault-flush.log 2>&1
+# Daily bulk transcript sync (fans out to subagent + codex syncers).
+0 12 * * * PATH=__PATH__ CLOUDSDK_CONFIG=__GCLOUD_CONFIG__ /usr/bin/env bash __INSTALL_DIR__/sync-transcripts-to-bq.sh >> __LOG_DIR__/session-vault-bq-sync.log 2>&1
+# GCS backup (kept only when logging.backup_enabled).
+30 12 * * * PATH=__PATH__ CLOUDSDK_CONFIG=__GCLOUD_CONFIG__ /usr/bin/env python3 __INSTALL_DIR__/backup-transcripts-to-gcs.py >> __LOG_DIR__/session-vault-backup.log 2>&1
+# NOTE: the 15s heartbeat cannot run from cron (1-minute floor). On Linux setup-vault.sh installs
+# a systemd --user timer for it (when logging.heartbeat_enabled); a host without systemd has no
+# heartbeat, but the rest of the vault works.

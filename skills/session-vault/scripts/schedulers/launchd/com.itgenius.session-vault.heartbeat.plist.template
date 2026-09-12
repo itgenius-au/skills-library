@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- session-vault 15s liveness heartbeat (optional; installed only when logging.heartbeat_enabled).
+     Tokens filled by setup-vault.sh. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL_PREFIX__.heartbeat</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__INSTALL_DIR__/session-heartbeat.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>CLOUDSDK_CONFIG</key>
+        <string>__GCLOUD_CONFIG__</string>
+    </dict>
+    <key>StartInterval</key>
+    <integer>15</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/session-vault-heartbeat.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/session-vault-heartbeat.log</string>
+</dict>
+</plist>

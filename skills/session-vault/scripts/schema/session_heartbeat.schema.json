@@ -1,0 +1,8 @@
+[
+  { "name": "session_id", "type": "STRING" },
+  { "name": "machine", "type": "STRING" },
+  { "name": "project_dir", "type": "STRING" },
+  { "name": "git_branch", "type": "STRING" },
+  { "name": "last_active", "type": "TIMESTAMP" },
+  { "name": "ingested_at", "type": "TIMESTAMP" }
+]

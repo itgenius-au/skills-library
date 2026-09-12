@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- session-vault GCS backup (optional; installed only when logging.backup_enabled). Tokens filled by setup-vault.sh. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL_PREFIX__.backup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__INSTALL_DIR__/backup-transcripts-to-gcs.py</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>CLOUDSDK_CONFIG</key>
+        <string>__GCLOUD_CONFIG__</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>12</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/session-vault-backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/session-vault-backup.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
