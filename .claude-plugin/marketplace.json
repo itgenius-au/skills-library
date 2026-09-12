@@ -5,7 +5,7 @@
     "url": "https://github.com/itgenius-au"
   },
   "metadata": {
-    "description": "Public Claude Code skills from itGenius: multi-model review, safe build and deploy, git hygiene, session workflow, and copy humanizing.",
+    "description": "Public Claude Code skills from itGenius: multi-model review, safe build and deploy, git hygiene, session workflow, copy humanizing, and a daily morning brief.",
     "version": "1.0.0"
   },
   "plugins": [
@@ -13,7 +13,7 @@
       "name": "skills-library",
       "source": "./",
       "strict": false,
-      "description": "itGenius's public Claude Code skills: multi-model code review (Codex, Gemini, GLM + debate), safe build and deploy gates, git cleanup, branch finishing, session wrap, and AI-copy humanizing.",
+      "description": "itGenius's public Claude Code skills: multi-model code review (Codex, Gemini, GLM + debate), safe build and deploy gates, git cleanup, branch finishing, session wrap, AI-copy humanizing, and a daily morning-brief HUD.",
       "skills": [
         "./skills/codex-review",
         "./skills/gemini-review",
@@ -28,7 +28,8 @@
         "./skills/repo-health-sweep",
         "./skills/machine-move",
         "./skills/session-wrap",
-        "./skills/copy-humanizer"
+        "./skills/copy-humanizer",
+        "./skills/morning-brief"
       ]
     }
   ]
