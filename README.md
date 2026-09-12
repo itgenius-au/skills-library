@@ -53,6 +53,12 @@ Restart Claude Code (or start a new session) so the skills load.
 |---|---|
 | `copy-humanizer` | Strip AI fingerprints from copy, blog posts, and email so it reads like a person wrote it. |
 
+**Session logging** - keep your own record of your work.
+
+| Skill | What it does |
+|---|---|
+| `session-vault` | Streams your Claude Code (and optionally Codex) sessions into your own BigQuery project, opt-in and private, so you can query your full work history. |
+
 ## Prerequisites
 
 You only need the tools for the skills you use.
@@ -67,6 +73,8 @@ You only need the tools for the skills you use.
 - **Build/deploy skills**: adapt the deploy examples (Cloud Run, static, file
   hosts) to your own stack. They call the review skills above for their review
   gates.
+- **`session-vault`**: your own Google Cloud project, plus `gcloud` (with `bq`),
+  `jq`, and `python3` on PATH.
 
 Keys come from your own env or secret manager. Nothing here hard-codes a key.
 

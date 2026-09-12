@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "bq_project": "my-gcp-project",
+  "bq_dataset": "claude_memory_vault",
+  "heartbeat_enabled": false,
+  "backup_enabled": false,
+  "gcs_backup_bucket": "",
+  "sa_secret_name": "local-session-sync-sa-key",
+  "gcloud_config_dir": "~/.config/gcloud-vault",
+  "offset_state_dir": "~/.claude/hooks/.offsets",
+  "machine_name": ""
+}

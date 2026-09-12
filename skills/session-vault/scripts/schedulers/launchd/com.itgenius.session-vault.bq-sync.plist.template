@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- session-vault daily bulk sync. Tokens (__INSTALL_DIR__ etc.) are filled in by setup-vault.sh. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL_PREFIX__.bq-sync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__INSTALL_DIR__/sync-transcripts-to-bq.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- /usr/sbin carries scutil (machine name); gcloud/bq come from homebrew. -->
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>CLOUDSDK_CONFIG</key>
+        <string>__GCLOUD_CONFIG__</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>12</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/session-vault-bq-sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/session-vault-bq-sync.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

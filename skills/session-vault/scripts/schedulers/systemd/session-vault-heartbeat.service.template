@@ -1,0 +1,8 @@
+[Unit]
+Description=session-vault 15s liveness heartbeat to BigQuery
+# Installed as a user unit by setup-vault.sh (systemctl --user) when heartbeat_enabled.
+
+[Service]
+Type=oneshot
+Environment=CLOUDSDK_CONFIG=__GCLOUD_CONFIG__
+ExecStart=/usr/bin/env bash __INSTALL_DIR__/session-heartbeat.sh
