@@ -2,8 +2,8 @@
 # session-vault: BigQuery logger for Claude Code UserPromptSubmit events.
 # Reads the hook JSON from stdin and logs the user prompt to BigQuery.
 # Best-effort: failures never block Claude. All targets come from
-# ~/.claude/itg.config.json via _vault.py - nothing is hardcoded.
-# No-op unless logging.enabled is true.
+# ~/.claude/session-vault.config.json via _vault.py - nothing is hardcoded.
+# No-op unless enabled is true.
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

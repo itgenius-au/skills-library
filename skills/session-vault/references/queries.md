@@ -1,8 +1,8 @@
 # Query recipes
 
-Run these against your own vault. Replace `PROJECT` with your `agent-{firstname}` project and
-`DS` with your dataset (default `claude_memory_vault`). From the shell, prefix with the isolated
-config so you query as the vault SA:
+Run these against your own vault. Replace `PROJECT` with your `bq_project` and `DS` with your
+dataset (default `claude_memory_vault`). From the shell, prefix with the isolated config so you
+query as the vault SA:
 
 ```
 CLOUDSDK_CONFIG=~/.config/gcloud-vault bq query --nouse_legacy_sql '<SQL>'

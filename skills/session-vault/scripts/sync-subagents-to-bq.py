@@ -15,7 +15,7 @@ of the candidate set. Inserts only new events with is_sidechain=true and
 event_type='vault_backfill_subagent'.
 
 All targets (BQ project, dataset, tables, gcloud config) come from
-~/.claude/itg.config.json via _vault.py - nothing is hardcoded. Auth is via
+~/.claude/session-vault.config.json via _vault.py - nothing is hardcoded. Auth is via
 CLOUDSDK_CONFIG (the vault's dedicated gcloud config); no service account is named
 here. No-op unless the vault is enabled.
 

@@ -2,10 +2,10 @@
 """Shared config-loader for the session-vault skill's scripts.
 
 Every script (the bash hooks, the python syncers, the setup installer) resolves
-its BigQuery / GCS / offset settings HERE, from ~/.claude/itg.config.json (with
-~/.claude/allteam-config.json still read as a fallback during the rename window),
-so no personal project id, dataset, service account, or path is ever hardcoded.
-See docs/config-convention.md in agent-allteam.
+its BigQuery / GCS / offset settings HERE, from a single flat, skill-owned
+config file at ~/.claude/session-vault.config.json, so no personal project id,
+dataset, service account, or path is ever hardcoded. See templates/
+session-vault.config.example.json for the full schema.
 
 Usage:
   Bash callers:    eval "$(python3 "$DIR/_vault.py" --shell-env)"   # exports VAULT_*; always exits 0
@@ -13,7 +13,7 @@ Usage:
   Setup / preflight: python3 _vault.py --check                      # human-readable; non-zero if misconfigured
   Machine JSON:    python3 _vault.py --json
 
-Stdlib only (json, os, shlex, sys) so it runs on any teammate's system python3.
+Stdlib only (json, os, shlex, sys) so it runs on any user's system python3.
 """
 
 import json
@@ -21,20 +21,17 @@ import os
 import shlex
 import sys
 
-# Config-path resolution for the rename window. itg.config.json is the new name;
-# allteam-config.json is still read as a fallback. An explicit env override (set
-# and non-empty) always wins and is honored unconditionally (no existence check),
-# in this order:
-#   ITG_CONFIG -> ALLTEAM_CONFIG_PATH -> ~/.claude/itg.config.json -> ~/.claude/allteam-config.json
-# ITG_CONFIG / ALLTEAM_CONFIG_PATH are used by tests and by a scratch-dataset dry-run.
+# Config-path resolution: an explicit env override (set and non-empty) always
+# wins and is honored unconditionally (no existence check); otherwise the
+# fixed default path is used whether or not it exists yet (load_config()
+# returns {} for a missing file).
+#   SESSION_VAULT_CONFIG -> ~/.claude/session-vault.config.json
+# SESSION_VAULT_CONFIG is used by tests and by a scratch-dataset dry-run.
 def _config_path():
-    for var in ("ITG_CONFIG", "ALLTEAM_CONFIG_PATH"):
-        val = os.environ.get(var)
-        if val:  # set and non-empty
-            return os.path.expanduser(val)
-    new = os.path.expanduser("~/.claude/itg.config.json")
-    old = os.path.expanduser("~/.claude/allteam-config.json")
-    return new if os.path.exists(new) else old
+    val = os.environ.get("SESSION_VAULT_CONFIG")
+    if val:  # set and non-empty
+        return os.path.expanduser(val)
+    return os.path.expanduser("~/.claude/session-vault.config.json")
 
 DEFAULTS = {
     "bq_dataset": "claude_memory_vault",
@@ -58,35 +55,35 @@ def _expand(path):
 
 
 def resolve(config=None):
-    """Resolve the full logging config, applying defaults and fallbacks.
+    """Resolve the full logging config, applying defaults.
 
-    bq_project falls back to gcp.personal_project. The GCS backup bucket
-    defaults to '<project>-claude-vault-backup' when unset. Paths are expanded.
+    The config file is a flat, top-level schema (no nested logging/gcp/person
+    blocks): enabled, bq_project, bq_dataset, heartbeat_enabled,
+    backup_enabled, gcs_backup_bucket, sa_secret_name, gcloud_config_dir,
+    offset_state_dir, machine_name. The GCS backup bucket defaults to
+    '<project>-claude-vault-backup' when unset. Paths are expanded.
     """
     cfg = config if config is not None else load_config()
-    logging = cfg.get("logging", {}) or {}
-    gcp = cfg.get("gcp", {}) or {}
-    person = cfg.get("person", {}) or {}
 
-    project = (logging.get("bq_project") or gcp.get("personal_project") or "").strip()
-    dataset = (logging.get("bq_dataset") or DEFAULTS["bq_dataset"]).strip()
-    bucket = (logging.get("gcs_backup_bucket") or "").strip()
+    project = (cfg.get("bq_project") or "").strip()
+    dataset = (cfg.get("bq_dataset") or DEFAULTS["bq_dataset"]).strip()
+    bucket = (cfg.get("gcs_backup_bucket") or "").strip()
     if not bucket and project:
         bucket = "%s-claude-vault-backup" % project
 
     return {
-        "enabled": bool(logging.get("enabled", False)),
-        "heartbeat_enabled": bool(logging.get("heartbeat_enabled", False)),
-        "backup_enabled": bool(logging.get("backup_enabled", False)),
+        "enabled": bool(cfg.get("enabled", False)),
+        "heartbeat_enabled": bool(cfg.get("heartbeat_enabled", False)),
+        "backup_enabled": bool(cfg.get("backup_enabled", False)),
         "bq_project": project,
         "bq_dataset": dataset,
         "messages_table": "%s.messages" % dataset,
         "heartbeat_table": "%s.session_heartbeat" % dataset,
-        "gcloud_config_dir": _expand(logging.get("gcloud_config_dir") or DEFAULTS["gcloud_config_dir"]),
-        "offset_state_dir": _expand(logging.get("offset_state_dir") or DEFAULTS["offset_state_dir"]),
-        "sa_secret_name": (logging.get("sa_secret_name") or DEFAULTS["sa_secret_name"]).strip(),
+        "gcloud_config_dir": _expand(cfg.get("gcloud_config_dir") or DEFAULTS["gcloud_config_dir"]),
+        "offset_state_dir": _expand(cfg.get("offset_state_dir") or DEFAULTS["offset_state_dir"]),
+        "sa_secret_name": (cfg.get("sa_secret_name") or DEFAULTS["sa_secret_name"]).strip(),
         "gcs_backup_bucket": bucket,
-        "machine_name": (person.get("machine_name") or "").strip(),
+        "machine_name": (cfg.get("machine_name") or "").strip(),
     }
 
 
@@ -94,9 +91,9 @@ def missing_keys(r):
     """Required config for an ENABLED vault. Empty list = OK to run."""
     missing = []
     if not r["bq_project"]:
-        missing.append("logging.bq_project (or gcp.personal_project)")
+        missing.append("bq_project")
     if r["backup_enabled"] and not r["gcs_backup_bucket"]:
-        missing.append("logging.gcs_backup_bucket")
+        missing.append("gcs_backup_bucket")
     return missing
 
 
@@ -138,13 +135,16 @@ def main(argv):
         print("%s: %s" % (k, r[k]))
     miss = missing_keys(r)
     if not r["enabled"]:
-        print("\nlogging.enabled is false - the vault is off (nothing is written).")
+        print("\nenabled is false - the vault is off (nothing is written).")
         return 0
     if miss:
         print("\nMISSING required config:", file=sys.stderr)
         for m in miss:
             print("  - %s" % m, file=sys.stderr)
-        print("\nEdit %s (copy templates/itg.config.example.json)." % _config_path(), file=sys.stderr)
+        print(
+            "\nEdit %s (copy templates/session-vault.config.example.json)." % _config_path(),
+            file=sys.stderr,
+        )
         return 1
     return 0
 

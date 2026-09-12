@@ -13,7 +13,7 @@ messages table (client=codex) so Codex conversations are searchable through the
 same vault as everything else.
 
 All targets (BigQuery project, dataset, messages table, gcloud config dir,
-machine name) are resolved from ~/.claude/itg.config.json via _vault.py -
+machine name) are resolved from ~/.claude/session-vault.config.json via _vault.py -
 nothing is hardcoded. No-op unless the vault is enabled and a project is set.
 
 Usage:
@@ -38,7 +38,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-# Config resolution: everything comes from ~/.claude/itg.config.json via the
+# Config resolution: everything comes from ~/.claude/session-vault.config.json via the
 # shared _vault.py loader. No personal project id, dataset, or path is hardcoded.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _vault  # noqa: E402

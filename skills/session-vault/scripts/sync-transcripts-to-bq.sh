@@ -2,7 +2,7 @@
 # session-vault: bulk-sync local Claude Code JSONL transcripts to BigQuery.
 # Finds main-session transcripts not yet in BQ, parses them into NDJSON, and batch-loads via
 # bq load, then fans out to the subagent and Codex python syncers. Safe to re-run (idempotent):
-# sessions already in BQ are skipped. All targets come from ~/.claude/itg.config.json via
+# sessions already in BQ are skipped. All targets come from ~/.claude/session-vault.config.json via
 # _vault.py - nothing is hardcoded. No-op unless enabled.
 #
 # Usage: ./sync-transcripts-to-bq.sh [--dry-run]   (or set VAULT_DRY_RUN=1)

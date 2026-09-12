@@ -1,6 +1,6 @@
 [Unit]
 Description=session-vault 15s liveness heartbeat to BigQuery
-# Installed as a user unit by setup-vault.sh (systemctl --user) when logging.heartbeat_enabled.
+# Installed as a user unit by setup-vault.sh (systemctl --user) when heartbeat_enabled.
 
 [Service]
 Type=oneshot

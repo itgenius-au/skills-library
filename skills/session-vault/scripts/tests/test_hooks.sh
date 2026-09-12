@@ -10,8 +10,8 @@ fail=0
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
 
-printf '{ "gcp": {"personal_project":"agent-alex"}, "logging": {"enabled":true, "heartbeat_enabled":true, "offset_state_dir":"%s/offsets"} }\n' "$SCRATCH" > "$SCRATCH/cfg.json"
-export ITG_CONFIG="$SCRATCH/cfg.json"
+printf '{ "bq_project":"agent-alex", "enabled":true, "heartbeat_enabled":true, "offset_state_dir":"%s/offsets" }\n' "$SCRATCH" > "$SCRATCH/cfg.json"
+export SESSION_VAULT_CONFIG="$SCRATCH/cfg.json"
 export VAULT_DRY_RUN=1
 
 echo "--- prompt hook ---"
@@ -37,8 +37,8 @@ echo "$rout" | grep -q '"model":"claude-x"' || { echo "FAIL: response model"; fa
 if [ -f "$SCRATCH/offsets/bbbb2222" ]; then echo "FAIL: dry-run advanced the offset"; fail=1; fi
 
 echo "--- heartbeat: disabled -> no-op ---"
-printf '{ "gcp": {"personal_project":"agent-alex"}, "logging": {"enabled":true, "heartbeat_enabled":false} }\n' > "$SCRATCH/off.json"
-hout=$(ITG_CONFIG="$SCRATCH/off.json" bash "$SV/session-heartbeat.sh")
+printf '{ "bq_project":"agent-alex", "enabled":true, "heartbeat_enabled":false }\n' > "$SCRATCH/off.json"
+hout=$(SESSION_VAULT_CONFIG="$SCRATCH/off.json" bash "$SV/session-heartbeat.sh")
 if [ -n "$hout" ]; then echo "FAIL: heartbeat should be silent when disabled"; fail=1; fi
 
 echo "--- heartbeat: enabled -> emits a row ---"

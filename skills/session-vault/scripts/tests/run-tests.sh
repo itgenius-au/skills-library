@@ -33,8 +33,8 @@ bash "$SV/scrub-check.sh" || rc=1
 
 echo "===== setup-vault.sh --dry-run (Checkpoint D) ====="
 SCRATCH="$(mktemp -d)"
-printf '%s\n' '{ "gcp": {"personal_project":"agent-alex"}, "logging": {"enabled":true, "heartbeat_enabled":true, "backup_enabled":true} }' > "$SCRATCH/cfg.json"
-if ITG_CONFIG="$SCRATCH/cfg.json" bash "$SV/setup-vault.sh" --dry-run; then :; else rc=1; fi
+printf '%s\n' '{ "enabled":true, "bq_project":"agent-alex", "heartbeat_enabled":true, "backup_enabled":true }' > "$SCRATCH/cfg.json"
+if SESSION_VAULT_CONFIG="$SCRATCH/cfg.json" bash "$SV/setup-vault.sh" --dry-run; then :; else rc=1; fi
 rm -rf "$SCRATCH"
 
 echo "===== TOTAL rc=$rc ====="

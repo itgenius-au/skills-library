@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Safety gate: with logging.enabled=false, EVERY script must be a silent no-op (exit 0, no
-# output, no cloud call). This proves a subscriber who installs the plugin uploads nothing
+# Safety gate: with enabled=false, EVERY script must be a silent no-op (exit 0, no
+# output, no cloud call). This proves a user who installs the skill uploads nothing
 # until they explicitly opt in.
 set -uo pipefail
 
@@ -10,8 +10,8 @@ fail=0
 
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
-printf '%s\n' '{ "logging": { "enabled": false } }' > "$SCRATCH/off.json"
-export ITG_CONFIG="$SCRATCH/off.json"
+printf '%s\n' '{ "enabled": false }' > "$SCRATCH/off.json"
+export SESSION_VAULT_CONFIG="$SCRATCH/off.json"
 
 check() {
   local name="$1" rc="$2" out="$3"
@@ -36,7 +36,7 @@ for p in vault-flush-offsets.py sync-subagents-to-bq.py sync-codex-transcripts-t
 done
 
 if [ "$fail" -eq 0 ]; then
-  echo "PASS: disabled no-op (all scripts silent when logging.enabled=false)"
+  echo "PASS: disabled no-op (all scripts silent when enabled=false)"
 else
   exit 1
 fi

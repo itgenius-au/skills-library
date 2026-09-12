@@ -2,8 +2,10 @@
 # session-vault setup: provision your BigQuery vault + install the hooks and scheduler.
 #
 # Idempotent (safe to re-run). --dry-run prints the full plan and makes NO changes and needs
-# no cloud credentials. The real run is confirm-gated. Everything targets YOUR OWN
-# agent-{firstname} project, read from ~/.claude/itg.config.json via _vault.py.
+# no cloud credentials. The real run is confirm-gated. Everything targets YOUR OWN Google
+# Cloud project, read from ~/.claude/session-vault.config.json (or $SESSION_VAULT_CONFIG)
+# via _vault.py. If that file does not exist yet, this script writes it for you (interactive
+# prompt for your project id; non-interactively it points you at the template and exits).
 #
 # What it does (real run):
 #   - ensures the BigQuery dataset + messages table (+ session_heartbeat if heartbeat is on)
@@ -54,10 +56,48 @@ safe_dir() {
 case "${HOME:-}" in /?*) ;; *) log "HOME is not a usable absolute path; refusing to run."; exit 1 ;; esac
 
 # --- config ---------------------------------------------------------------
+CONFIG_PATH="${SESSION_VAULT_CONFIG:-$HOME/.claude/session-vault.config.json}"
+
+step "Config (${CONFIG_PATH})"
+if [ ! -f "$CONFIG_PATH" ]; then
+  if [ "$DRY_RUN" = 1 ]; then
+    log "  no config file found at ${CONFIG_PATH}"
+    log "  [dry-run] would prompt for bq_project and write a flat config there"
+  elif [ -t 0 ]; then
+    log "  no config file found at ${CONFIG_PATH}"
+    printf '  Google Cloud project for your BigQuery vault (bq_project): '
+    read -r NEW_BQ_PROJECT
+    if [ -z "$NEW_BQ_PROJECT" ]; then
+      log "  no project entered; aborting."
+      exit 1
+    fi
+    mkdir -p "$(dirname "$CONFIG_PATH")" || fail_exit "create $(dirname "$CONFIG_PATH")"
+    cat > "$CONFIG_PATH" <<CFGEOF
+{
+  "enabled": true,
+  "bq_project": "${NEW_BQ_PROJECT}",
+  "bq_dataset": "claude_memory_vault",
+  "heartbeat_enabled": false,
+  "backup_enabled": false,
+  "gcs_backup_bucket": "",
+  "sa_secret_name": "local-session-sync-sa-key",
+  "gcloud_config_dir": "~/.config/gcloud-vault",
+  "offset_state_dir": "~/.claude/hooks/.offsets",
+  "machine_name": ""
+}
+CFGEOF
+    chmod 600 "$CONFIG_PATH" 2>/dev/null || true
+    log "  wrote ${CONFIG_PATH}"
+  else
+    log "  no config file found at ${CONFIG_PATH} and no terminal to prompt on."
+    log "  Copy templates/session-vault.config.example.json to ${CONFIG_PATH}, set bq_project, and re-run."
+    exit 0
+  fi
+fi
+
 VAULT_ENV="$(python3 "$DIR/_vault.py" --shell-env 2>/dev/null || true)"
 eval "$VAULT_ENV"
 
-step "Config (~/.claude/itg.config.json)"
 if ! python3 "$DIR/_vault.py" --check; then
   log ""
   log "Fix the missing keys above, then re-run."
@@ -65,11 +105,11 @@ if ! python3 "$DIR/_vault.py" --check; then
 fi
 if [ "${VAULT_ENABLED:-0}" != "1" ]; then
   log ""
-  log "logging.enabled is false. Set it to true in ~/.claude/itg.config.json, then re-run."
+  log "enabled is false. Set it to true in ${CONFIG_PATH}, then re-run."
   exit 1
 fi
 if [ -z "${VAULT_BQ_PROJECT:-}" ]; then
-  log "No BigQuery project resolved (set logging.bq_project or gcp.personal_project)."
+  log "No BigQuery project resolved (set bq_project in ${CONFIG_PATH})."
   exit 1
 fi
 
@@ -102,14 +142,14 @@ else
 fi
 
 if ! safe_dir "$GCLOUD_CONFIG"; then
-  log "Refusing unsafe logging.gcloud_config_dir: '$GCLOUD_CONFIG' (must be an absolute path, not / or \$HOME)."
+  log "Refusing unsafe gcloud_config_dir: '$GCLOUD_CONFIG' (must be an absolute path, not / or \$HOME)."
   exit 1
 fi
 # This value is substituted into cron/launchd/systemd unit files. Restrict it to safe path
 # characters so it can never inject shell metacharacters, whitespace, or newlines into them.
 case "$GCLOUD_CONFIG" in
   *[!A-Za-z0-9_./-]*)
-    log "Refusing logging.gcloud_config_dir with unsafe characters: '$GCLOUD_CONFIG' (allowed: A-Z a-z 0-9 _ . / -)."
+    log "Refusing gcloud_config_dir with unsafe characters: '$GCLOUD_CONFIG' (allowed: A-Z a-z 0-9 _ . / -)."
     exit 1 ;;
 esac
 

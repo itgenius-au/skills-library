@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- session-vault GCS backup (optional; installed only when logging.backup_enabled). Tokens filled by setup-vault.sh. -->
+<!-- session-vault GCS backup (optional; installed only when backup_enabled). Tokens filled by setup-vault.sh. -->
 <plist version="1.0">
 <dict>
     <key>Label</key>

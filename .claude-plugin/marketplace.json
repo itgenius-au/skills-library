@@ -29,7 +29,8 @@
         "./skills/machine-move",
         "./skills/session-wrap",
         "./skills/copy-humanizer",
-        "./skills/morning-brief"
+        "./skills/morning-brief",
+        "./skills/session-vault"
       ]
     }
   ]

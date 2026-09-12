@@ -25,8 +25,8 @@ Retention: handled by a GCS object-lifecycle rule set once at setup time, so thi
 NEVER prunes. It is idempotent: if today's archive already exists it skips the work (pass
 --force to rebuild and overwrite).
 
-Config: every target comes from ~/.claude/itg.config.json via _vault.py - nothing is
-hardcoded. NO-OP unless logging.enabled AND logging.backup_enabled are true and a bucket
+Config: every target comes from ~/.claude/session-vault.config.json via _vault.py - nothing is
+hardcoded. NO-OP unless enabled AND backup_enabled are true and a bucket
 is configured.
 
 Deps: the `gcloud` CLI (for `gcloud storage`) + Python stdlib only.
@@ -152,12 +152,12 @@ def main():
     # NO-OP unless the backup is explicitly turned on and a bucket is configured.
     if not CFG["backup_enabled"]:
         if dry_run:
-            log("[dry-run] logging.backup_enabled is false - backup is a no-op")
+            log("[dry-run] backup_enabled is false - backup is a no-op")
         return 0
     bucket = CFG["gcs_backup_bucket"]
     if not bucket:
         if dry_run:
-            log("[dry-run] logging.gcs_backup_bucket is unset - nothing to upload to")
+            log("[dry-run] gcs_backup_bucket is unset - nothing to upload to")
         return 0
 
     machine = machine_name()

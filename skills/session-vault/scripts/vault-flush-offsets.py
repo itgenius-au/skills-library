@@ -19,7 +19,7 @@ Fidelity of swept rows vs live-logged rows (accepted trade-offs):
 - A session resumed mid-sweep is skipped (transcript-mtime recheck); the worst-case
   race that remains is duplicate vault rows, never loss.
 
-All targets are resolved from ~/.claude/itg.config.json via _vault.py; nothing is
+All targets are resolved from ~/.claude/session-vault.config.json via _vault.py; nothing is
 hardcoded, and the script is a no-op unless the vault is enabled. The Stop hook it
 re-runs is its sibling in this scripts/ directory.
 
@@ -30,7 +30,7 @@ templates). Run manually with --dry-run (or VAULT_DRY_RUN=1) to inspect first.
 import os
 import sys
 
-# Resolve all BigQuery / GCS / offset settings from ~/.claude/itg.config.json.
+# Resolve all BigQuery / GCS / offset settings from ~/.claude/session-vault.config.json.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _vault  # noqa: E402  (must follow the sys.path insert above)
 
@@ -193,7 +193,7 @@ def main(argv: "Optional[list[str]]" = None) -> int:
     parser.add_argument("--claude-dir", type=Path, default=Path.home() / ".claude",
                         help="Claude Code home; its projects/ subdir is scanned for transcripts")
     parser.add_argument("--offsets-dir", type=Path, default=None,
-                        help="Per-session offset dir (default: logging.offset_state_dir from config)")
+                        help="Per-session offset dir (default: offset_state_dir from config)")
     parser.add_argument("--hook", type=Path, default=None,
                         help="Stop hook to invoke (default: sibling bq-log-response.sh)")
     parser.add_argument("--min-idle-hours", type=float, default=1.0)

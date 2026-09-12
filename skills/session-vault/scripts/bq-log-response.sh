@@ -3,7 +3,7 @@
 # Reads the JSONL transcript, finds new lines since the last log via a per-session
 # offset file, and batch-inserts them to BigQuery in one call. The offset advances
 # ONLY on a successful insert, so a failed insert is retried on the next Stop event.
-# All targets come from ~/.claude/itg.config.json via _vault.py. No-op unless enabled.
+# All targets come from ~/.claude/session-vault.config.json via _vault.py. No-op unless enabled.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

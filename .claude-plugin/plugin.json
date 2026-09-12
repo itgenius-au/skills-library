@@ -21,6 +21,7 @@
     "git",
     "workflow",
     "machine-move",
-    "copy-humanizer"
+    "copy-humanizer",
+    "session-vault"
   ]
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # session-vault: write a per-session "last active" heartbeat to BigQuery from transcript
-# file mtimes. OPTIONAL - runs only when logging.heartbeat_enabled is true.
+# file mtimes. OPTIONAL - runs only when heartbeat_enabled is true.
 #
 # Why: the Stop hook only writes a row when a TURN ENDS, so a session in a long multi-tool
 # turn has no fresh row for many minutes and a liveness monitor wrongly marks it stale. The
@@ -8,7 +8,7 @@
 # activity continuously. Run every ~15s (launchd) or by a systemd timer, this captures that
 # mtime plus the session's current cwd + branch, read from the transcript tail.
 #
-# All targets come from ~/.claude/itg.config.json via _vault.py - nothing is hardcoded.
+# All targets come from ~/.claude/session-vault.config.json via _vault.py - nothing is hardcoded.
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
