@@ -1,10 +1,10 @@
 ---
 name: zai-review
-description: "Use z.ai's GLM models (GLM-5.2) as a second-opinion reviewer AND a general coding engine, via the z.ai HTTP API. A third independent model alongside codex-review and gemini-review — for code/decision/plan/build/codebase review, and for offloading coding tasks to GLM. Triggers on: zai review, z.ai review, glm review, ask glm, glm check, review with glm, glm audit, glm opinion, glm code, glm coding, use glm, zhipu review, third opinion."
+description: "Use z.ai's GLM models (GLM-5.2) as a second-opinion reviewer AND a general coding engine, via the z.ai HTTP API. A third independent model alongside codex-review and gemini-review - for code/decision/plan/build/codebase review, and for offloading coding tasks to GLM. Triggers on: zai review, z.ai review, glm review, ask glm, glm check, review with glm, glm audit, glm opinion, glm code, glm coding, use glm, zhipu review, third opinion."
 argument-hint: "[mode: code|decision|plan|build|codebase|coding] [target: file path, branch, or description] [--model glm-5.2|glm-5-turbo|glm-4.6]"
 ---
 
-# z.ai (GLM) Review + Coding — Second-Opinion Model & Coding Engine
+# z.ai (GLM) Review + Coding - Second-Opinion Model & Coding Engine
 
 Calls **z.ai's GLM models** (default `glm-5.2`) over the HTTP API to get independent analysis
 from a third model alongside `codex-review` (GPT) and `gemini-review` (Gemini), and to offload
@@ -16,10 +16,10 @@ have GLM draft an implementation that your primary agent then applies and verifi
 z.ai ships **no headless CLI** (ZCODE is a GUI app), so this skill talks to the **HTTP API
 directly** via `curl`. The consequence that changes how you use it:
 
-**GLM only sees what you put in the prompt — it does NOT autonomously explore the repo.**
+**GLM only sees what you put in the prompt - it does NOT autonomously explore the repo.**
 Codex and Gemini drive their own CLI and run `git diff`, read files, grep, etc. GLM (direct-HTTP)
-cannot. So **the calling agent must assemble the context** — the diff, the relevant file contents,
-the plan text — *into the prompt* before calling. If you don't show GLM the file, GLM can't review it.
+cannot. So **the calling agent must assemble the context** - the diff, the relevant file contents,
+the plan text - *into the prompt* before calling. If you don't show GLM the file, GLM can't review it.
 
 The empirical-verification preamble still applies, but its "run the command yourself" clause is
 addressed to *the calling agent*: supply the evidence, and where GLM says "I couldn't verify X
@@ -58,15 +58,15 @@ manager. No local `.env`, no hard-coded key.
 
 **Pin `--model glm-5.2`.** GLM-5.2 is z.ai's current flagship (best for coding/review). Verified
 working 2026-06-29. Alternatives: `glm-5-turbo` (faster/cheaper, same family), `glm-4.6` (older,
-much lighter reasoning — good for quick/cheap checks). Confirm the live lineup occasionally; z.ai
+much lighter reasoning - good for quick/cheap checks). Confirm the live lineup occasionally; z.ai
 also lists `glm-4.7`, `glm-4.5-air`.
 
-**Use a generous `max_tokens` (32000 for a real diff review).** GLM-5.2 is a *heavy reasoner* — it
+**Use a generous `max_tokens` (32000 for a real diff review).** GLM-5.2 is a *heavy reasoner* - it
 can spend thousands of tokens "thinking" before emitting the final answer, and `max_tokens` caps
-reasoning **plus** answer. Too low a cap returns empty/truncated `content` — and because the
+reasoning **plus** answer. Too low a cap returns empty/truncated `content` - and because the
 reasoning is spent first, you lose the *findings*, not the preamble. **Measured 2026-07-12:
 `max_tokens 8192` TRUNCATED on a ~2,200-line diff review and produced no usable findings; 32000
-completed.** So 8192 is NOT a safe floor for a substantial review — treat it as the floor for a
+completed.** So 8192 is NOT a safe floor for a substantial review - treat it as the floor for a
 *small* one (a single file, a short decision). Budget ~32000 for any multi-file diff, and tell GLM
 explicitly to keep its reasoning brief and lead with the findings. For a one-line answer, 512 is plenty.
 
@@ -79,7 +79,7 @@ Never reference a local `.env` or hard-code the key.
 
 **Surface failures, don't guess.** Have the wrapper exit non-zero and print a clear marker on
 failure (see Edge Cases). Treat an "insufficient balance" error as "needs a plan top-up," never as
-a review verdict — and never substitute your own opinion silently for a failed GLM call.
+a review verdict - and never substitute your own opinion silently for a failed GLM call.
 
 ## Core Principle: Verify Empirically, Don't Trust Docs
 
@@ -90,11 +90,11 @@ You are reviewing real code. Treat documentation, code comments, and any prior a
 UNVERIFIED HYPOTHESES, not facts. Base every finding on evidence you can point to: a file:line
 reference or the output of a command. If you cannot verify a claim from the material provided, say
 so explicitly ("I'd need to see X to confirm") rather than guessing. When an area is clean, report
-an evidenced per-focus-area verdict ("checked X, Y, Z — no issues because …"), not a bare "no findings".
+an evidenced per-focus-area verdict ("checked X, Y, Z - no issues because …"), not a bare "no findings".
 ```
 
 Because GLM can't run commands itself here, "evidence" means reasoning grounded in the code you
-supplied — and an explicit "I'd need to see X to confirm" when the supplied context is insufficient
+supplied - and an explicit "I'd need to see X to confirm" when the supplied context is insufficient
 (then you fetch X).
 
 ## When to Use
@@ -153,7 +153,7 @@ glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT"
 ```
 
 Variants: for a **specific file**, inline its full contents instead of the diff; for a **branch
-diff**, use `git diff main...HEAD`. Always inline the actual file bodies GLM needs — it can't open
+diff**, use `git diff main...HEAD`. Always inline the actual file bodies GLM needs - it can't open
 them itself.
 
 ### 2. Decision Review (`decision`)
@@ -168,7 +168,7 @@ $DECISION_DESCRIPTION
 Context (verify against any code I've inlined; flag claims you can't check):
 $CONTEXT
 
-Play devil's advocate — risks, failure modes, alternatives, blind spots. Be blunt. If after
+Play devil's advocate - risks, failure modes, alternatives, blind spots. Be blunt. If after
 thorough reasoning the decision holds up, say so plainly rather than manufacturing weak
 counter-arguments."
 glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT"
@@ -182,7 +182,7 @@ PROMPT="$PREAMBLE
 
 Critique the implementation plan below. Consider: soundness, missing/underspecified steps,
 riskiest parts, sequencing/dependencies, over- or under-engineering. The plan describes INTENDED
-work — I've inlined the relevant current code after it; flag any mismatch between the plan's
+work - I've inlined the relevant current code after it; flag any mismatch between the plan's
 assumptions and the real code.
 
 === plan ===
@@ -217,7 +217,7 @@ glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT"
 
 ### 5. Codebase Review (`codebase`)
 
-GLM can't crawl the repo — *you* pick the area and inline it.
+GLM can't crawl the repo - *you* pick the area and inline it.
 
 ```bash
 PROMPT="$PREAMBLE
@@ -235,7 +235,7 @@ glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT"
 ### 6. Coding (`coding`)
 
 Offload an implementation/refactor to GLM. **GLM proposes; the primary agent applies and verifies**
-(the direct-HTTP path does not let GLM edit files — that's the optional agentic recipe).
+(the direct-HTTP path does not let GLM edit files - that's the optional agentic recipe).
 
 ```bash
 PROMPT="$PREAMBLE
@@ -243,7 +243,7 @@ PROMPT="$PREAMBLE
 Task: $CODING_TASK
 
 Here are the relevant current files. Produce the implementation as a unified diff (or full file
-bodies if cleaner), with a short rationale. Don't invent files/APIs you can't see below — if you
+bodies if cleaner), with a short rationale. Don't invent files/APIs you can't see below - if you
 need to see something else, say which.
 
 === current files ===
@@ -253,13 +253,13 @@ glm-exec.sh --model glm-5.2 --max-tokens 32000 -- "$PROMPT"
 ```
 
 Then: the primary agent reviews GLM's proposed diff, **applies it**, and **verifies** (runs the
-tests / the app). Never apply GLM's output blind — treat it as a competent draft to check.
+tests / the app). Never apply GLM's output blind - treat it as a competent draft to check.
 
 ## Workflow
 
 1. **Determine mode + target + project dir.** If unclear, ask. Default: `code` on uncommitted changes.
 2. **Assemble context.** Run `git diff` / read files / read the plan and inline them into `$PROMPT`.
-   Scope tightly — focused context is cheaper and sharper than a repo dump.
+   Scope tightly - focused context is cheaper and sharper than a repo dump.
 3. **Build the prompt.** `PREAMBLE` + mode instructions + the inlined context.
 4. **Run the wrapper**, capturing output:
    ```bash
@@ -267,14 +267,14 @@ tests / the app). Never apply GLM's output blind — treat it as a competent dra
    rc=$?   # non-zero + "unfunded" => tell the user to fund; non-zero + auth => key issue
    ```
 5. **Handle "I need to see X."** If GLM flags context it lacks, fetch it, append, re-run. This
-   round-trip is the point of the empirical preamble — guessed answers are worse than "show me X".
+   round-trip is the point of the empirical preamble - guessed answers are worse than "show me X".
 6. **Synthesize and present** (below).
 
 ## Synthesize and Present
 
 1. Present GLM's findings, attributed "**GLM found:**".
-2. Add your own assessment — agree / disagree / nuance per finding.
-3. Highlight **disagreements** between your review and GLM's — the most valuable signal.
+2. Add your own assessment - agree / disagree / nuance per finding.
+3. Highlight **disagreements** between your review and GLM's - the most valuable signal.
 4. Prioritize by severity/impact.
 5. Recommend concrete next steps.
 
@@ -317,14 +317,14 @@ ANTHROPIC_MODEL=glm-5.2 \
 ## Configuration
 
 ### Model selection
-- `glm-5.2` — **default**. Flagship; strongest coding/review; heavy reasoner (use high `max_tokens`).
-- `glm-5-turbo` — same family, faster/cheaper; good for quick reviews.
-- `glm-4.6` — older, much lighter reasoning; cheapest for simple checks.
+- `glm-5.2` - **default**. Flagship; strongest coding/review; heavy reasoner (use high `max_tokens`).
+- `glm-5-turbo` - same family, faster/cheaper; good for quick reviews.
+- `glm-4.6` - older, much lighter reasoning; cheapest for simple checks.
 - Verify the live lineup occasionally (z.ai also exposes `glm-4.7`, `glm-4.5-air`).
 
 ### Endpoint
-- `coding` (**default**) → `https://api.z.ai/api/coding/paas/v4` — billed by the GLM Coding Plan.
-- `general` → `https://api.z.ai/api/paas/v4` — for pay-as-you-go balance instead of a Coding Plan.
+- `coding` (**default**) → `https://api.z.ai/api/coding/paas/v4` - billed by the GLM Coding Plan.
+- `general` → `https://api.z.ai/api/paas/v4` - for pay-as-you-go balance instead of a Coding Plan.
 
 ### Quota awareness
 GLM-5.2's heavy reasoning burns completion tokens fast (Coding Plan quota is prompt-count + a
@@ -348,13 +348,13 @@ signal than any one alone.
 
 ## Edge Cases
 
-- **Insufficient balance (code 1113)**: no Coding Plan / no balance. Fund at z.ai/subscribe — NOT a code finding.
+- **Insufficient balance (code 1113)**: no Coding Plan / no balance. Fund at z.ai/subscribe - NOT a code finding.
 - **Auth error (401/403)**: bad/rotated key. Re-push your z.ai key to your secret manager (or reset `ZAI_API_KEY`).
-- **Truncated response**: hit `max_tokens` mid-answer — raise `max_tokens` and re-run.
-- **Empty / unparseable content**: 200 but no usable content / unexpected shape — dump the raw body and inspect.
-- **Transient failure (429-rate / 5xx / network)**: retry with backoff; if it persists, surface it — don't guess — and offer to fall back to Codex/Gemini.
+- **Truncated response**: hit `max_tokens` mid-answer - raise `max_tokens` and re-run.
+- **Empty / unparseable content**: 200 but no usable content / unexpected shape - dump the raw body and inspect.
+- **Transient failure (429-rate / 5xx / network)**: retry with backoff; if it persists, surface it - don't guess - and offer to fall back to Codex/Gemini.
 - **Model slug rejected**: try `glm-5-turbo` / `glm-4.6`; re-check the live model list.
-- **GLM reviews stale/missing context**: it can only see what you inlined — if a finding references something you didn't send, that's a context gap, not a real bug. Cross-check before presenting.
+- **GLM reviews stale/missing context**: it can only see what you inlined - if a finding references something you didn't send, that's a context gap, not a real bug. Cross-check before presenting.
 - **GLM hallucinates file:line**: cross-check every reference against the real files before surfacing.
 - **Empty diff**: if `code` mode finds no changes, say so and offer a branch diff / specific file / codebase area.
 - **Large context**: scope to the relevant files; don't dump the whole repo (cost + dilution).
