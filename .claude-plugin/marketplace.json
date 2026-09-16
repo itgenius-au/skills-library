@@ -5,29 +5,34 @@
     "url": "https://github.com/itgenius-au"
   },
   "metadata": {
-    "description": "Public Claude Code skills from itGenius: multi-model review, safe build and deploy, git hygiene, session workflow, copy humanizing, and a daily morning brief.",
-    "version": "1.0.0"
+    "description": "Public Claude Code skills from itGenius: the full house dev process (brainstorm, plan, build, verify, wrap), multi-model review, safe deploy gates, git hygiene, copy humanizing, and a daily morning brief.",
+    "version": "1.1.0"
   },
   "plugins": [
     {
       "name": "skills-library",
       "source": "./",
       "strict": false,
-      "description": "itGenius's public Claude Code skills: multi-model code review (Codex, Gemini, GLM + debate), safe build and deploy gates, git cleanup, branch finishing, session wrap, AI-copy humanizing, and a daily morning-brief HUD.",
+      "description": "itGenius's public Claude Code skills: the full dev process (dev-brainstorming, dev-writing-plans, dev-quick-build, dev-auto-build, dev-qa-verify, dev-debugging), multi-model review (quad-review over Codex, Gemini, GLM, and an isolated Claude pass; plus ai-debate), safe build and deploy gates, git cleanup, session wrap, AI-copy humanizing, and a daily morning-brief HUD.",
       "skills": [
+        "./skills/dev-brainstorming",
+        "./skills/dev-writing-plans",
+        "./skills/dev-quick-build",
+        "./skills/dev-auto-build",
+        "./skills/dev-qa-verify",
+        "./skills/dev-debugging",
+        "./skills/quad-review",
         "./skills/codex-review",
         "./skills/gemini-review",
         "./skills/zai-review",
+        "./skills/fable-review",
         "./skills/ai-debate",
         "./skills/triple-review",
-        "./skills/auto-build",
-        "./skills/quick-build",
         "./skills/deploy-safely",
+        "./skills/session-wrap",
         "./skills/cleanup-git",
-        "./skills/finish-branch",
         "./skills/repo-health-sweep",
         "./skills/machine-move",
-        "./skills/session-wrap",
         "./skills/copy-humanizer",
         "./skills/morning-brief"
       ]

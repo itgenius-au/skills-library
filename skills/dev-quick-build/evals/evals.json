@@ -1,0 +1,24 @@
+{
+  "skill_name": "dev-quick-build",
+  "note": "Quick Build ends in a production deploy + live browser pass, so batch/baseline eval runs are not viable. Evaluate via supervised live runs against a real project.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "On the team page of your admin console, rename the Inactive chip to Suspended and make it count/show suspended accounts from the directory instead; stale accounts go back into Need attention. Use your standard building practices and deploy if the safety gates pass.",
+      "expected_output": "Worktree + dated runbook created first; TDD (failing tests then green); full gates; adversarial review; deploy-safely gates; deploy-by-digest with pre-flip marker verify + integrity gate on the percent-100 entry; deploy-log record with rollback pointer; live browser verification; branch merged to origin/main.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "quick build: on the Devices page, add a filter chip that shows only devices that haven't checked in for 30+ days. Ship it if gates pass.",
+      "expected_output": "Same end-to-end shape; semantics grounded in the device last_seen data model and written into the runbook Decisions section before code.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "quick build: add a CSV export button to the Groups table on /team, and also add a members-count column to the workspace-health page, and while you're there refactor the API client. Deploy today.",
+      "expected_output": "Scope gate fires: multi-surface ask is split or routed to dev-writing-plans rather than silently becoming a train; at most one well-scoped slice proceeds as a quick build with the user told why.",
+      "files": []
+    }
+  ]
+}

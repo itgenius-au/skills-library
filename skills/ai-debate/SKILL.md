@@ -14,9 +14,9 @@ other's disputed findings, and converge on consensus - with minority opinions pr
 to justify ~3 minutes and 4 CLI calls.**
 
 > **Model pins live in your sibling review skills, not here.** This skill drives Gemini and Codex
-> the **same way as `gemini-review` / `codex-review`** — reuse their model flags and their guards.
+> the **same way as `gemini-review` / `codex-review`** - reuse their model flags and their guards.
 > Do NOT restate model versions in this file (they rot). Point at those skills for the current pins.
-> Prepend the shared verification preamble (below) to every model prompt — the debate is only as
+> Prepend the shared verification preamble (below) to every model prompt - the debate is only as
 > good as its evidence discipline.
 
 ## When to Use
@@ -123,7 +123,7 @@ Confidence: 1-10
 Proposed Action: <what to do about it>
 ```
 
-**Then fire Gemini and Codex in parallel.** Issue both Bash tool calls in the same response with `run_in_background: true`. **Use different timeouts: Gemini `timeout: 180000`, Codex `timeout: 600000`** — a deep Codex review at `xhigh` runs ~5–7 min, so a uniform `120000` (2 min) would kill Codex mid-review. Codex is the long pole: collect results as each lands, and **don't block synthesis on a model that wedged or timed out** — degrade gracefully (see Error Handling). If Codex emits no output at all, that's a wedged handshake, not slow work — kill and relaunch it attached.
+**Then fire Gemini and Codex in parallel.** Issue both Bash tool calls in the same response with `run_in_background: true`. **Use different timeouts: Gemini `timeout: 180000`, Codex `timeout: 600000`** - a deep Codex review at `xhigh` runs ~5–7 min, so a uniform `120000` (2 min) would kill Codex mid-review. Codex is the long pole: collect results as each lands, and **don't block synthesis on a model that wedged or timed out** - degrade gracefully (see Error Handling). If Codex emits no output at all, that's a wedged handshake, not slow work - kill and relaunch it attached.
 
 For **code/build/codebase modes**, instruct models to gather context themselves (they have filesystem access). Build the shared prompt once, prepending the verification preamble:
 
@@ -140,18 +140,18 @@ For each issue or insight you find, provide:
 - Proposed Action: what should be done
 
 Be thorough but prioritize. Focus on issues that matter, not style nitpicks.
-Report a maximum of 10 findings, ranked by severity. A clean result is fine — report it
+Report a maximum of 10 findings, ranked by severity. A clean result is fine - report it
 as an evidenced per-area verdict, not a bare 'no findings'."
 ```
 
 ```bash
-# Gemini (Bash call 1, run_in_background: true, timeout: 180000) — same flags as gemini-review.
+# Gemini (Bash call 1, run_in_background: true, timeout: 180000) - same flags as gemini-review.
 cd "$PROJECT_DIR" && GEMINI_API_KEY="$KEY" gemini -p "$PROMPT" \
   --approval-mode yolo -m gemini-3.1-pro-preview -o text 2>/dev/null   # match your gemini-review pin
 ```
 
 ```bash
-# Codex (Bash call 2, run_in_background: true, timeout: 600000) — same flags as codex-review.
+# Codex (Bash call 2, run_in_background: true, timeout: 600000) - same flags as codex-review.
 codex exec -s read-only -C "$PROJECT_DIR" "$PROMPT" 2>/dev/null         # match your codex-review pin
 ```
 
@@ -192,7 +192,7 @@ Compare all 3 Round 1 outputs and categorize each finding:
 
 ### Step 7: Round 2 - Challenge Disputed Findings
 
-**Fast path — verify directly instead of debating when you can.** If a disputed finding is independently **code-verifiable** (you can settle it by reading the referenced file or running one command yourself), do that and **skip the Round 2 model round-trip for it** — a model round-trip to re-litigate something you can check in 30s is wasted latency and cost. Send to Round 2 only the disputes that genuinely need another model's *judgment*: design trade-offs, risk calls, anything with no ground truth in the code. If every dispute is code-verifiable, resolve them all directly and go straight to synthesis (Step 8), noting "Round 2 skipped — disputes resolved by direct verification." In the output, mark which disputes were settled by verification vs. by debate.
+**Fast path - verify directly instead of debating when you can.** If a disputed finding is independently **code-verifiable** (you can settle it by reading the referenced file or running one command yourself), do that and **skip the Round 2 model round-trip for it** - a model round-trip to re-litigate something you can check in 30s is wasted latency and cost. Send to Round 2 only the disputes that genuinely need another model's *judgment*: design trade-offs, risk calls, anything with no ground truth in the code. If every dispute is code-verifiable, resolve them all directly and go straight to synthesis (Step 8), noting "Round 2 skipped - disputes resolved by direct verification." In the output, mark which disputes were settled by verification vs. by debate.
 
 Send the remaining (judgment-needing) disputes to Gemini and Codex for challenge. The primary agent acts as **moderator only** in this round - does NOT add its own rebuttal.
 
@@ -250,7 +250,7 @@ Read all Round 1 and Round 2 outputs. Before writing the final output, perform a
 **Mode**: [code/decision/plan/build/codebase]
 **Target**: [what was reviewed]
 **Models**: Primary agent (in-process) + Gemini + Codex
-**Model pins**: [as resolved at run time — Gemini/Codex per your sibling review skills]
+**Model pins**: [as resolved at run time - Gemini/Codex per your sibling review skills]
 **Rounds**: [2 or 3]
 
 ### Consensus (all models agree)
@@ -307,7 +307,7 @@ After presenting results, offer:
 
 ### Model Selection
 
-Model pins are **owned by your `codex-review` and `gemini-review` skills**, not restated here —
+Model pins are **owned by your `codex-review` and `gemini-review` skills**, not restated here -
 restating is exactly how a multi-model skill drifts to a stale version. Match whatever those skills
 currently pin. The primary agent runs in-process on its own session model.
 
