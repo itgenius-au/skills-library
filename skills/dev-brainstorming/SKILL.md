@@ -32,6 +32,8 @@ Before your first question, classify the request and say the classification out 
 - **Bounded** - a well-scoped change to code that already exists in this repo: a new flag, a small endpoint, a one-file fix. Bounded means the flow you are changing is already here to read; if there is no existing flow to change, the task is not bounded. Ask the clarifying questions that matter, present a short design IN CHAT (a few sentences to a few short paragraphs), and STOP. Implementation starts only after your human partner says yes - a bounded task's approval is as hard a gate as an architectural one. No spec file, no plan document; build via `dev-quick-build` (or whatever small-scope build flow you use).
 - **Architectural** - new projects, new subsystems, changes that restructure how components fit together or alter interfaces others depend on. Follow the full process below: research, divergent options, design, written spec, spec review, then `dev-writing-plans`.
 
+**A new skill? Check for a mode first.** When the request is a new skill or plugin feature, first ask whether it is a mode of an existing skill (the same job at a different moment, the same delivery). If so, design it as a mode with its steps in that skill's `references/<mode>.md`, not as a new skill. (A skill built on its own that is later folded into an existing one as a mode is wasted work.)
+
 When in doubt between two paths, take the heavier one. The ratchet is one-way: hidden complexity discovered mid-task upgrades the path - stop, say so, and step up. Nothing downgrades mid-task.
 
 ## Anti-pattern: "too simple to need approval"
@@ -55,14 +57,14 @@ Every path ends with your human partner approving your intent before implementat
 2. **Present the question + probe plan** - 2-3 sentences.
 3. **Get approval** - a nod is enough.
 4. **Investigate** - as cheaply as correctness allows.
-5. **Report findings** - a recommendation; label anything built as throwaway.
+5. **Report findings** - a recommendation; label anything built as throwaway. Record any decision the human makes on the findings in a dated note when you wrap up.
 
 ## Bounded path
 
 1. **Explore context** - read the files, docs, recent commits for the flow you are changing.
-2. **Ask clarifying questions** - one at a time, only the ones that matter.
+2. **Ask clarifying questions** - one at a time, only the ones that matter. If the change touches who runs a tool or its safety controls, ask the "who runs it" question from Architectural Phase 1, step 1, and size the controls the same way.
 3. **Present a short design in chat** - approach, files touched, how it is tested.
-4. **Get approval** - STOP and wait for an explicit yes. Presenting the design and starting in the same breath is skipping the gate.
+4. **Get approval** - STOP and wait for an explicit yes. Presenting the design and starting in the same breath is skipping the gate. The bounded path writes no spec, so pass the approval and each approved design decision to `dev-quick-build`, which records them in its runbook.
 5. **Implement** - hand to `dev-quick-build` (or your own project's small-scope build flow); TDD applies; no plan document.
 
 ## Architectural path
@@ -74,14 +76,15 @@ The full flow. Create a task per step and work them in order.
 Goal: find the real options, then lead with a recommendation. Diverge in your own thinking; present a short, ranked shortlist, not the raw breadth.
 
 1. **Clarify the problem space** - purpose (outcome, not solution), who benefits, constraints, and the trigger (why now). If the request describes several independent subsystems, flag it and help decompose into sub-projects before refining any one - each gets its own spec -> plan -> build cycle.
+   - **Ask who runs it: a person who reviews the result and says go, or an unattended agent?** Size the controls to that answer. A tool a person runs gets checks shown to that person (with evidence for each), and it stops where the action would certainly be wrong, or where a safety precondition cannot be checked at all (a required read failed, or the system returned a state the tool does not know). Everything else is a warning for the person to judge. Keep a control that binds an approval to what runs (a plan id that rejects an edited or stale plan) wherever a plan is approved now and applied later or by someone else. Do not add controls whose only job is to guard against agent misuse (policy stores, confirm hooks, audit forensics) when a person reviews and runs each step. Write the answer into the spec, and hold reviewers to it, because review rounds add controls each cycle. (A human-run tool designed against agent misuse can grow to more than double its task count over a few review rounds, then get cut back to a robust tool with lots of checks and no machinery.)
 2. **Research context** BEFORE ideating - by default, delegate the reading:
    - **Dispatch parallel reader subagents** (a cheaper model - a mid-tier model for judgment-light reading, your smallest model for bulk - via model override) to read the relevant code, docs, and prior decisions, each returning a condensed summary, not raw file dumps. Design from those summaries so the lead turn stays uncluttered. This is on by default; skip it only for a change whose context you can already see, and keep the design synthesis itself a single pass (coding/design does not parallelize the way reading does).
-   - Search the codebase for existing patterns that apply, check whatever task tracker you use (Asana, Jira, Linear, GitHub Issues, or similar) for related work or prior art, and check any long-lived notes or past-conversation history you keep for earlier decisions on this topic.
+   - Search the codebase for existing patterns that apply, check whatever task tracker you use (Jira, Linear, GitHub Issues, or similar) for related work or prior art, and check any long-lived notes or past-conversation history you keep for earlier decisions on this topic.
    Do not brainstorm in a vacuum - ground every option in the real code and project context.
 3. **Offer the visual companion just-in-time** - NOT upfront. The first time a question would be genuinely clearer shown than described (a real mockup / layout / diagram question), offer it then, as its own message. See the Visual Companion section.
 4. **Settle on the distinct approaches the space genuinely has - usually 2-4.** Strip anything that is a minor variant of another; only exceed four when the design space is truly wide, and say so. For each, know its one-line what-it-does, its key tradeoff, and a rough effort (S/M/L/XL). YAGNI ruthlessly.
 5. **Resolve any orthogonal decisions first.** If the design has cross-cutting axes (e.g. a behaviour choice AND a source-of-truth choice), settle those first, each as its own question - it collapses the option space. Never present the full option set and the axes in the same turn.
-6. **Present recommend-led, through the question box.** Summarise each approach in a sentence with its key tradeoff, then **recommend ONE** with a one-line why. Surface the choice through `AskUserQuestion`: the recommended option **listed first and marked "(Recommended)"** as the default path, then the alternatives, plus a "Something else / combine" row. Invite combinations only when the approaches actually compose; otherwise it is a single pick. Do NOT post a dense lettered comparison table.
+6. **Present recommend-led, through the question box.** Summarise each approach in a sentence with its key tradeoff, then **recommend ONE** with a one-line why. Surface the choice through `AskUserQuestion`: the recommended option **listed first and marked "(Recommended)"** as the default path, then the alternatives, plus a "Something else / combine" row. Invite combinations only when the approaches actually compose; otherwise it is a single pick. Do NOT post a dense lettered comparison table. **Names are the exception:** never offer a name, slug, or naming convention as a question-box option. The short option labels make the agent shorten or rewrite names, so the exact spelling is lost. Ask about names in chat instead, each candidate as exact text in a code span.
 7. **Ask only genuine ambiguity.** Skip questions the code or an obvious convention already settles; ask one at a time, each with a recommended default. At any point offer "accept all remaining recommendations" so a long interview can end in one step.
 
 ### Phase 2: Converge (design)
@@ -135,15 +138,17 @@ Goal: a concrete spec `dev-writing-plans` can consume.
 
 2. **Commit the spec** to git (in your working branch or worktree). If the visual companion was used, commit any keeper mockups into a tracked dir too - the companion's `.brainstorm/` scratch dir is gitignored and does not survive a fresh checkout. If a design artefact was published and locked in, link its URL in the spec's User Experience section too - that link, not a re-description, is the design record carried into the plan, PR, and deploy record.
 
-3. **Spec self-review** (inline, fix and move on): scan for placeholders / TBD / TODO; internal contradictions; scope too broad for one plan; requirements ambiguous enough to build the wrong thing. Fix issues inline.
+3. **Spec self-review** (inline, fix and move on): scan for placeholders / TBD / TODO; internal contradictions; scope too broad for one plan; requirements ambiguous enough to build the wrong thing. Fix issues inline. **Ownership check:** no step, table, digest, alert or held list is owned by a staff person or a staff role (for example "Treasury" or "the AR officer"). Name an agent session or a service identity as the owner, with the user or the engineering leaders as approver.
 
 4. **Spec-reviewer subagent pass** - dispatch a general-purpose subagent using `spec-reviewer-prompt.md` (in this skill dir) against the spec file. It returns Approved | Issues Found. Adopt confirmed issues, re-run the self-review, and only proceed once it is clean.
 
-5. **User review gate (executive summary, not the file)** - do NOT tell your human partner to open or read the spec file. Present a self-contained **executive summary in chat** that lets them decide without opening anything. Link the committed spec path once, as a reference only. Keep it tight (4-7 bullets), plain English, decisions first:
+5. **User review gate (executive summary, not the file)** - do NOT tell your human partner to open or read the spec file. Present a self-contained **executive summary in chat** that lets them decide without opening anything. Link the committed spec path once, as a reference only. Keep it tight (4-7 bullets), plain English, decisions first. Write it with the `exec-summary` skill if you have it, using these sections:
    - **What gets built** - one line.
    - **Why** - the problem it solves, one line.
    - **Key design decisions** - the 2-3 choices that shaped it, each stated so a non-reader can judge it, not just named.
    - **Scope** - what is in, and what is explicitly out.
+   - **Names to be introduced (immutable names only)** - every NEW name this design creates that cannot be renamed in place, where a rename means delete-and-recreate or a data migration: cloud project ID, database instance, database, table and column names, data-warehouse dataset and table, storage bucket, service account, secret name, message topic, deployed service name, and any other name a rename would force you to recreate. Check infra names against your project's naming conventions and schema names against its existing patterns. State the convention or precedent each one follows; flag any that do not conform or lack a precedent. These names get explicit sign-off here, before build - a rename after ship means a rebuild or a migration. List them in chat, each name as exact text in a code span, and take the sign-off as a chat reply, not through the `AskUserQuestion` pop-up. If the design creates none, write "None". Mutable names (files, modules, the branch, functions, UI components, routes) are not listed and need no sign-off: they follow the project's existing patterns.
+   - **Cloud locations** - for every NEW cloud resource in the list above that has a region or location (deployed service, database instance, data-warehouse dataset, storage bucket, registry repository), state its location beside its name and check it against your project's location rules (in short: co-locate with the resources it talks to, measured live with your cloud CLI). Flag any other location with its reason. A location cannot change after create (a move is a rebuild and a data migration), so it takes the same chat sign-off as the name. If the design creates no cloud resource, write "None".
    - **Any risk, cost, or hard-to-reverse flag** worth their eye.
    - **Decisions they still own** - only real product / design / trust calls, each as a plain-English question.
 
@@ -173,6 +178,7 @@ If they accept, read the detailed guide before proceeding: `visual-companion.md`
 - **Lead with a recommendation.** Present at most 2-4 approaches, recommend ONE with a one-line why, and keep the alternatives and reasoning visible so the choice is real. Surface choices through the question box (`AskUserQuestion`) with the recommendation preselected, never a dense options table. If the user just wants your call, give it and say why.
 - **Read this skill as intent, not a rigid script.** Prefer stating the goal and constraints over enumerating steps; over-prescription reduces quality on the strongest models. The flow assumes no particular model.
 - **Model & subagents (operating note):** plan on your strongest available model (raise effort before switching models - measure your workhorse model at high effort as the bar a pricier model must beat), run reader subagents on a cheaper model, and build in a fresh session.
+- **Moving a live workload? Measure first.** Before you design a migration, measure whether the workload is live. Then propose the cheapest in-place option first. A move design built before anyone checked can turn out to be a small in-place fix.
 - The spec is the architectural-path deliverable. If the session ends early, at minimum produce the spec.
 - Follow existing project patterns; explore the current structure before proposing changes. Include targeted improvements to code you're working in; don't propose unrelated refactoring.
 - At the review gate, the deliverable is a decision-ready **executive summary in chat**, never "go read the spec file". The committed spec is a reference, not the thing you ask them to read.

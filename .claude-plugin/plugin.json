@@ -1,7 +1,7 @@
 {
   "name": "skills-library",
-  "version": "1.1.0",
-  "description": "itGenius's public Claude Code skills: the full dev process (brainstorm, plan, build, verify, wrap), multi-model review (Codex, Gemini, GLM, and an isolated Claude pass, plus ai-debate), safe build and deploy gates, git cleanup, session wrap, and AI-copy humanizing.",
+  "version": "1.2.0",
+  "description": "itGenius's public Claude Code skills: the full dev process (dev-brainstorming, dev-writing-plans, dev-quick-build, dev-auto-build, dev-qa-verify, dev-debugging, dev-deploy-safely), multi-model review (review-swarm over Codex, Gemini, GLM, and an isolated Claude pass; plus review-debate), session and repo hygiene, executive summaries, checked PDFs, AI-copy humanizing, and a daily morning-brief HUD.",
   "author": {
     "name": "itGenius",
     "url": "https://github.com/itgenius-au"
@@ -19,14 +19,17 @@
     "codex",
     "gemini",
     "glm",
-    "quad-review",
-    "ai-debate",
     "build",
     "deploy",
     "debugging",
     "git",
     "workflow",
     "machine-move",
-    "copy-humanizer"
+    "copy-humanizer",
+    "review-swarm",
+    "review-debate",
+    "exec-summary",
+    "pdf",
+    "session-hygiene"
   ]
 }

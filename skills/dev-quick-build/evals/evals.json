@@ -5,7 +5,7 @@
     {
       "id": 1,
       "prompt": "On the team page of your admin console, rename the Inactive chip to Suspended and make it count/show suspended accounts from the directory instead; stale accounts go back into Need attention. Use your standard building practices and deploy if the safety gates pass.",
-      "expected_output": "Worktree + dated runbook created first; TDD (failing tests then green); full gates; adversarial review; deploy-safely gates; deploy-by-digest with pre-flip marker verify + integrity gate on the percent-100 entry; deploy-log record with rollback pointer; live browser verification; branch merged to origin/main.",
+      "expected_output": "Worktree + dated runbook created first; TDD (failing tests then green); full gates; adversarial review; dev-deploy-safely gates; deploy-by-digest with pre-flip marker verify + integrity gate on the percent-100 entry; deploy-log record with rollback pointer; live browser verification; branch merged to origin/main.",
       "files": []
     },
     {

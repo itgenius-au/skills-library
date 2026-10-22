@@ -32,18 +32,23 @@ Subagent (general-purpose):
     stylistic preferences, and "sections less detailed than others" are not.
 
     Approve unless there are serious gaps that would lead to a flawed plan.
+    Be blunt but fair: do not flatter, do not invent certainty, and say plainly
+    when something is still risky - not only when it is fine.
 
     ## Output Format
 
     ## Spec Review
 
-    **Status:** Approved | Issues Found
+    **Verdict:** not ready | promising but blocked (N blockers) | mostly good, N caveat(s) | ready to build
 
-    **Issues (if any):**
-    - [Section X]: [specific issue] - [why it matters for planning]
+    **Blockers (must fix before planning):**
+    - [Section X]: [specific issue] - [why it would cause a flawed plan]
 
-    **Recommendations (advisory, do not block approval):**
-    - [suggestions for improvement]
+    **Important caveats:**
+    - [a real risk or ambiguity worth naming that does not, by itself, block]
+
+    **Minor nits (advisory):**
+    - [wording / polish]
 ```
 
-**Reviewer returns:** Status, Issues (if any), Recommendations
+**Reviewer returns:** Verdict, Blockers, Important caveats, Minor nits

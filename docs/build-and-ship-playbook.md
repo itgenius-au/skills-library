@@ -5,7 +5,7 @@ changes. Load on demand before non-trivial build work.
 
 This is the canonical statement of *how to build and ship*. Workflow **skills**
 (`dev-quick-build`, `dev-auto-build`, `dev-brainstorming`, `dev-writing-plans`,
-`dev-qa-verify`, `deploy-safely`) are the triggered mechanics; this doc is the
+`dev-qa-verify`, `dev-deploy-safely`) are the triggered mechanics; this doc is the
 standing set of **gates and principles** they all share, plus the map of which
 path to take. When a skill and this doc overlap, the skill owns the
 step-by-step; this doc owns the *why* and the non-negotiables.
@@ -17,8 +17,8 @@ coordination the change needs.
 
 | Path | Use when | Flow |
 |---|---|---|
-| **Quick build** | ONE small feature, one project, ≤ ~a day, **no schema migration, no authz/tier-gate change, no new external integration** | `dev-quick-build` skill (self-contained: worktree → runbook → scout → plan review → TDD → gates → diff review → deploy-safely → browser verify → merge) |
-| **Plan-driven** | Migration, authz/security change, multi-phase, multi-subsystem, or anything that trips the dev-quick-build scope gate | `dev-brainstorming` → `dev-writing-plans` → build runbook → per-phase build → **quad review** → `deploy-safely` → post-deploy smoke + persona QA → merge |
+| **Quick build** | ONE small feature, one project, ≤ ~a day, **no schema migration, no authz/tier-gate change, no new external integration** | `dev-quick-build` skill (self-contained: worktree → runbook → scout → plan review → TDD → gates → diff review → dev-deploy-safely → browser verify → merge) |
+| **Plan-driven** | Migration, authz/security change, multi-phase, multi-subsystem, or anything that trips the dev-quick-build scope gate | `dev-brainstorming` → `dev-writing-plans` → build runbook → per-phase build → **review swarm** → `dev-deploy-safely` → post-deploy smoke + persona QA → merge |
 
 **The scope gate is load-bearing.** If a "quick" build turns out to need a
 migration or an authz change while scouting, STOP and switch to the
@@ -44,15 +44,28 @@ a finished deploy unless a staged/canary rollout was explicitly requested
 2. **TDD.** Failing tests first, confirm they fail for the right reason, then
    implement to green. Mirror the existing test file's mocking and helpers;
    make fixtures *discriminate* (distinct observable output per behavior).
+   **Never weaken a test to go green** - no skip/xfail to silence a gap, no
+   timeout raised without proof the operation completes, no loosened or
+   excluded assertion; disclose any change that reduces what is verified in
+   the commit message. **Test the real code:** the test calls the production
+   function/handler, never a hand-mirrored copy of its logic (extract the
+   logic if it is not callable in isolation).
 3. **Local gates green before review.** Backend: lint + full test suite.
    Frontend: full test run + production build (typecheck + bundler). Record
-   the counts.
-4. **Adversarial review before deploy.** Scale to the diff (see Quad review
-   below). Adopt confirmed DEFECTS; adopt cheap test-hardening nits even when
-   refuted. A reviewer ENHANCEMENT (a new feature, a bigger refactor, a
+   the counts. Run gates with the **pinned interpreter and locked deps the
+   container uses** (or inside the built image), not a bare runner against
+   whatever the dev machine has; treat a drop in tests-run (new skips) as a
+   regression. **"No gate" is not a passing gate** - a repo with no test
+   suite or no CI is a blocking finding to surface, never a silent pass.
+4. **Adversarial review before deploy.** Scale to the diff (see Review swarm
+   below). Adopt only MUST-FIX defects (critical/high, or medium flagged by
+   2+ models; the `review-swarm` must-fix rule) and `simplify` items that
+   remove something outside the ask. A quick build reviews its plan with
+   `review-swarm` quick mode and its code with two finder agents, one pass
+   each. A reviewer ENHANCEMENT (a new feature, a bigger refactor, a
    speculative abstraction, hardening beyond the ask) is logged as a
    follow-up, not built - see Scope discipline below.
-5. **`deploy-safely` gates, every one.** Origin-safety, main-sync
+5. **`dev-deploy-safely` gates, every one.** Origin-safety, main-sync
    (`behind=0`), local-main publication, wip-free commit range. Rebase onto
    `origin/main` and **re-run the gates + tests after** the rebase.
 6. **Build-then-deploy-by-digest + Served-Image Integrity + ancestor gate**
@@ -93,20 +106,27 @@ engine is Claude, Codex, or another coding agent.
 - The runbook is the durable artifact. Keep it updated as phases complete;
   squash working commits into a clean commit at the end.
 
-## Quad review (the standard for anything non-trivial)
+## Review swarm (the standard for anything non-trivial)
+
+**Quick builds are sized for speed.** `dev-quick-build` reviews its plan with
+`review-swarm` quick mode (four models, one round, each capped at about ten
+minutes, for every quick build including authz, migration, secrets or
+data-write changes) and its code with one pass of two finder agents. The
+four-model panel and the defect-until-clean loop below are the
+`dev-auto-build` and `dev-writing-plans` path.
 
 Independent multi-model review before deploy: four different models at
-maximum review effort - see the `codex-review`, `gemini-review`,
-`zai-review`, and `fable-review` skills (`ai-debate` for higher-stakes
-disputes). Run all four over the *isolated feature diff* (compute it from
+maximum review effort - see the `review-with-codex`, `review-with-gemini`,
+`review-with-glm`, and `review-with-claude` skills (`review-debate` for
+higher-stakes disputes). Run all four over the *isolated feature diff* (compute it from
 the merge-base, not the raw target branch, so unrelated in-flight work
 doesn't pollute the review). Then:
 
 - **Synthesize** into one table (finding × model × verdict). Areas all four
   confirm clear are done.
 - **Apply the clear fixes**, then re-verify.
-- **Run the defect-until-clean loop autonomously.** Fold the confirmed
-  DEFECTS, re-run, repeat until no must-fix defect remains or the bound is
+- **Run the defect-until-clean loop autonomously.** Fold the MUST-FIX
+  defects, re-run, repeat until no must-fix defect remains or the bound is
   hit (the build skills cap the cycles). The exit is the absence of defects,
   NOT the reviewers running out of suggestions - four models always propose
   more; advisory enhancements do not hold the gate open. The gate returns
@@ -125,9 +145,11 @@ doesn't pollute the review). Then:
 ## Scope discipline (both paths)
 
 The house method is thorough on correctness; it is NOT a licence to grow the
-change. Overbuild rarely enters through the review loop (reviewers find
-defects, not features); it enters through the build agent going off-ask.
-Hold these:
+change. Overbuild enters two ways: the build agent going off-ask, and the
+review loop folding in every finding (builds can come out several times the
+size of the ask and over-restricted). So reviewers get THE ASK, only
+must-fix defects drive a loop (the `review-swarm` must-fix rule), and
+reviewers also report what to remove (`simplify`). Hold these:
 
 - **Simplest path.** Build the simplest change that satisfies the ask/plan
   and passes the gates. The ask (quick build) or plan (plan-driven) is the
@@ -141,14 +163,44 @@ Hold these:
 - **Unsupervised means tighter, not looser.** The longer the owner is away,
   the narrower you stay. An OK for task X is not an OK for the adjacent
   thing you noticed on the way.
-- **Defect vs enhancement in review.** A DEFECT (correctness, security,
-  breakage, missing test) is fixed and drives the loop. An ENHANCEMENT (a
+- **Defect vs enhancement in review.** A MUST-FIX defect (critical/high, or
+  medium flagged by 2+ models) is fixed and drives the loop; other defects
+  are advisory. An ENHANCEMENT (a
   new feature, a bigger refactor, a speculative abstraction, hardening
   beyond the ask) is logged as a follow-up, never built without the owner's
   go-ahead; if it would add new surface area, it is surfaced as a scope
   decision, not folded into a "fix". The good pattern: a reviewer's larger
   suggestion is named as separate scope and routed to the owner, not
   self-adopted mid-build.
+- **Refuse by default only where it is earned.** In the thing you build (not
+  the deploy and CI gates, which still abort), a refusal, a typed
+  confirmation token, or a "stop until a named person confirms" step
+  belongs only on an action that is irreversible and destructive, or that
+  moves money with no human in the loop. Everywhere else: warn, log, and
+  continue. A human-in-the-loop skill trusts the human - the user's "go"
+  approves the action, including a money action or a customer send; do not
+  add a second confirmation word. An UNKNOWN answer is a warning to show,
+  not a reason to refuse. Fail-closed defaults built into ops tools block
+  normal work and have to be loosened later.
+
+## Stuck loops and escalation (both paths)
+
+- **Second identical failure: stop attempting, start diagnosing.** A failure
+  that repeats for the same root cause (not just the same test name) means
+  the current approach will not fix it. Before spending another bounded
+  attempt, diagnose off the failing path - one hypothesis, proven against
+  live state (the `dev-debugging` discipline) - then let that drive the next
+  attempt. The numeric cap (fix-runs, review cycles) is a ceiling, not
+  permission to re-try an unchanged cause.
+- **A delivered-nothing outcome is escalated, not silently closed.** A task
+  whose gates pass but whose measurable objective came back flat or worse is
+  a negative outcome: state the before/after plainly and hand it up with
+  options, never mark it done. A plan's conditional wording authorizes
+  trying, not silently dropping the objective.
+- **An unattended-run STOP must reach a human.** In a scheduled or
+  dispatched run with no one watching, an escalation posts an active
+  notification (team chat / push) in the same run - not just a flipped
+  status field nobody is polling.
 
 ## Database migrations (plan-driven only; dev-quick-build excludes them)
 
@@ -175,9 +227,23 @@ code deploy, and **inspect before upgrading**:
 
 **Applies to every service that deploys as a container image** (Cloud Run,
 ECS, Kubernetes, or similar). Never hand-write an ad-hoc "deploy straight
-from source" for a prod service; go through the project's `deploy-safely`
-skill or its documented pipeline. If a project's docs still describe a
+from source" for a prod service; go through the shared `dev-deploy-safely`
+skill (or the project's own deploy skill where one exists) or its documented
+pipeline. If a project's docs still describe a
 source-based deploy as the prod path, they are superseded by this section.
+
+**Gold standard: deploy from CI.** Every container deployable ships from a CI
+pipeline (for example GitHub Actions) in one shape: a `staging` branch
+deploys staging and the default branch deploys production, both on `push`;
+one deployer identity per environment, bound by workload identity federation
+to its branch, no long-lived keys; build once, deploy **by digest** with no
+traffic, then the ancestor gate, flip, Served-Image Integrity and smoke, each
+gate aborting; branch rulesets require a PR and the full CI suite; a merge
+allowlist on the default branch wherever people outside engineering hold
+write. The checks below are what those workflows run. Running them by hand
+(or via `dev-deploy-safely`) is for a repo that has not moved yet, or a
+rollback. A build-system trigger that deploys a tag straight to 100% traffic
+is **not** the standard.
 
 A deploy-from-source shortcut can pin a **stale image digest** - a green
 "deployed" that silently serves old code with a health check still passing.
@@ -223,6 +289,44 @@ required reviewer), the manual recipe is break-glass only: build → PR →
 merge; the pipeline deploys. Migrations stay a separate manually-approved
 step; browser and persona verification stay a post-deploy pass.
 
+**Further container-deploy correctness checks** worth keeping in your own
+checklist, each keyed to an incident in your history: manual-vs-auto-deploy
+races, env-var replace-vs-merge, smoking through the deployed service's own
+identity, background-work durability, the per-service ingress/auth contract,
+full-tree rebase, CI `concurrency:` groups, and dependency/supply-chain
+scanning.
+
+## Docs and skill edits are not a build
+
+A change that only touches docs, agent skills, agent config or notes does not
+run the build path (no quick-build ceremony, no review swarm). Open a
+short-lived PR and merge it once the repo's required checks pass. First prove
+the merge does not deploy (see the `dev-deploy-safely` section "Does merging this deploy?"): a merge that deploys is a production deploy,
+whatever it touches.
+
+**Give push-to-deploy repos a docs route.** Where every merge to the default
+branch deploys, a docs-only merge rebuilds and redeploys production for
+nothing. The pattern:
+
+- Keep `on: push` with **no** `paths` / `paths-ignore` filter. A first
+  `changes` job decides, and the deploy job runs unless that job succeeded
+  and said "no deploy" (a failed job still publishes its outputs, so check
+  its result too).
+- Diff from the `git-sha` label of the revision serving **100%**, not from the
+  push's `before` sha. Code stranded by a failed or cancelled deploy then
+  ships with the next merge, docs-only or not.
+- **Fail closed.** Skip only when every changed path is on a narrow docs
+  allow-list that is disjoint from the image's `COPY` set. No label, a cloud
+  CLI error, bad output, or any manual re-run means deploy. A re-run keeps
+  the same commit, so it is the redeploy-without-a-commit lever. Add no
+  manual-dispatch trigger on the production branch: it bypasses the merge
+  allowlist.
+- CI stays unfiltered: the required PR checks run on every PR, and `changes`
+  is never a required check (a check that goes green without running tests
+  is how untested code reaches prod).
+- After a traffic rollback, revert the default branch to match. Otherwise the
+  next merge, docs-only included, redeploys the rolled-back code.
+
 ## Browser / persona verification
 
 - Use your agent's browser integration in your own signed-in session. Never
@@ -238,12 +342,26 @@ step; browser and persona verification stay a post-deploy pass.
   project's own QA skill or a `docs/test-protocol.md`.
 - If no browser is available this session, record the persona pass as
   **OWED** (standing convention) and say so in the summary.
+- **A failed check is not automatically a product defect.** Before routing a
+  browser/QA failure back to the build, confirm the check actually reached
+  the target on the real surface and that the rendered result - not a
+  timeout, stale selector, or tooling hiccup - is what failed. Never resolve
+  a tooling failure by loosening a wait or an assertion.
+- **Do not fake the journey.** Exercise the real control under test; never
+  substitute a direct DB write, an internal-only endpoint, or a deep link for
+  the action being verified (setup/teardown around it is fine).
+- **Rendered evidence rules.** A backend/log/DB check corroborates but never
+  overrides a contradictory screenshot; when they disagree, the rendered page
+  is the finding.
+- **No test-only backdoors in production code** - no hidden route, flag, or
+  field added just so a checker can observe something a real user could not
+  (a stable `data-testid` is fine).
 
 ## Where the deeper detail lives
 
 **Deploy specifics** (commands, service names, integrity gate, migration
 procedure, persona roster) are **project-scoped** - keep them in each
-project's own `docs/deploy-safely.md` and skills. Do not hoist
+project's own `docs/dev-deploy-safely.md` and skills. Do not hoist
 project-specific deploy commands into a cross-project doc like this one.
 
 ## Why two paths, not one skill

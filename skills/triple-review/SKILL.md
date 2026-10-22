@@ -1,42 +1,12 @@
 ---
 name: triple-review
-description: "Compatibility alias - the house review is now the four-model quad review (Codex + Gemini + GLM + a deep-reasoning Claude pass). This skill forwards to `quad-review` so older invocations still resolve. Triggers on: triple review, triple-review, triple check, triple-check this, three-model review, 3-model review, review with all three, Codex Gemini GLM, panel review."
-argument-hint: "[mode: code|decision|plan|doc|build] [target: file path, branch, dir, or description]"
+description: "ALIAS - retired; forwards to review-swarm. Kept so `/triple-review` and older references still resolve. Triggers on: triple review, triple-review, triple check, triple-check this, three-model review, 3-model review, review with all three, Codex Gemini GLM, panel review."
 ---
 
-# Triple Review -> Quad Review (alias)
+# Triple Review -> retired, use Review Swarm
 
-The house panel review gained a fourth leg and was renamed from **triple review** to **quad review**.
-The panel is now:
+The triple review was retired. The panel review is now **`review-swarm`** (Codex + Gemini + GLM + a deep-reasoning Claude pass).
 
-- **Codex** (OpenAI, external)
-- **Gemini** (Google, external)
-- **GLM** (z.ai, external)
-- **Fable** (a deep-reasoning Claude pass, run isolated and read-only)
+**Do this now:** invoke the **`review-swarm`** skill with the exact same request the caller gave you (same mode and target), and follow it end to end.
 
-This skill exists only so `/triple-review` and any older references to "triple review" keep working.
-It is a thin forwarding alias, not a separate implementation.
-
-## What to do
-
-Invoke the **`quad-review`** skill with the exact same mode and target the caller gave you, and follow
-it end to end. Do not run a three-model review here yourself - hand off so the Fable leg is included
-too.
-
-- Same modes (`code` / `build` / `plan` / `decision` / `doc`), same synthesis, same gate behaviour.
-- `/triple-review <args>` is equivalent to `/quad-review <args>`.
-
-## Example
-
-```
-/triple-review code src/app/billing.ts
-```
-
-is equivalent to:
-
-```
-/quad-review code src/app/billing.ts
-```
-
-New work should call `quad-review` directly. This alias is kept only for back-compatibility with older
-invocations and documentation that still says "triple review."
+`/triple-review <args>` is equivalent to `/review-swarm <args>`. This alias exists only for back-compatibility. New work should call `review-swarm` directly.
