@@ -1,0 +1,64 @@
+/* Default print stylesheet (document-pdf skill). Signature-block classes are only used by documents that get signed.
+   Markdown -> HTML (pandoc gfm or python-markdown) -> WeasyPrint or Chrome headless -> PDF.
+   Uses system fonts only (nothing is bundled). */
+
+@page {
+  size: A4;
+  margin: 18mm 18mm 20mm 18mm;
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #555;
+                  font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", "DejaVu Sans", sans-serif; }
+}
+
+html { font-size: 10.5pt; }
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", "DejaVu Sans", sans-serif;
+  color: #111; line-height: 1.45; max-width: none; margin: 0; padding: 0;
+}
+h1 { font-size: 16pt; margin: 0 0 6pt 0; line-height: 1.25; }
+h1 + h1 { font-size: 13.5pt; font-weight: 600; color: #333; margin-bottom: 12pt; }
+h2 { font-size: 12.5pt; margin: 18pt 0 6pt 0; border-bottom: 1px solid #999; padding-bottom: 2pt; page-break-after: avoid; }
+h3 { font-size: 11pt; margin: 12pt 0 4pt 0; page-break-after: avoid; }
+p { margin: 0 0 7pt 0; text-align: left; orphans: 3; widows: 3; }
+ol, ul { margin: 0 0 8pt 0; padding-left: 20pt; }
+li { margin-bottom: 3pt; }
+table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt 0; font-size: 9.5pt; page-break-inside: avoid; }
+th, td { border: 1px solid #888; padding: 4pt 6pt; vertical-align: top; text-align: left; }
+th { background: #eee; font-weight: 600; }
+strong { font-weight: 600; }
+hr { border: 0; border-top: 1px solid #999; margin: 12pt 0; }
+.pagebreak { page-break-after: always; }
+.keep { page-break-inside: avoid; }
+.execution { page-break-before: always; }
+
+/* Two-column bilingual clauses: <table class="bilingual"><tr><td>English</td><td>Español</td></tr></table> */
+table.bilingual td { width: 50%; border: 0; padding: 2pt 6pt 6pt 0; }
+table.bilingual td + td { font-style: italic; color: #333; }
+
+/* ---- Signature blocks ----
+   One signer:  <div class="sigblock"> ... </div>
+   Two side by side: <table class="sigtable"><tr><td> ... </td><td> ... </td></tr></table>
+   Inside each:
+     <p class="siglabel">Full name, capacity (for and on behalf of Entity)</p>
+     <p class="sigtag">[sig|req|signer1]</p>    e-sign text tag, printed WHITE (invisible)
+     <p class="sigline">Signature</p>
+     <p class="datetag">[date|req|signer1]</p>
+     <p class="sigline">Date</p>
+   The white tags are anchors for the e-sign tool. Keep .sigtag at least 20 mm high: signers
+   complained that small fields left no room to sign. Do NOT use display:flex for the two-up
+   layout: Chrome's print engine pushes a flex row onto a new page. */
+.sigblock { margin: 22pt 0 10pt 0; padding: 10pt 12pt 8pt 12pt; border: 1px solid #bbb; page-break-inside: avoid; width: 105mm; }
+.siglabel { font-weight: 600; margin: 0 0 6pt 0; }
+.sigtag { color: #ffffff; font-size: 24pt; line-height: 1.1; margin: 0; height: 20mm; }
+.datetag { color: #ffffff; font-size: 12pt; margin: 0; height: 8mm; }
+.sigline { border-top: 1px solid #333; margin: 0 0 8pt 0; padding-top: 2pt; font-size: 8.5pt; color: #555; }
+table.sigtable { border-collapse: separate; border-spacing: 8mm 0; width: auto; margin: 10pt 0 0 -8mm; font-size: 10pt; page-break-inside: avoid; }
+table.sigtable td { border: 1px solid #bbb; padding: 7pt 10pt 5pt 10pt; width: 78mm; vertical-align: top; }
+table.sigtable .sigline { margin-bottom: 5pt; }
+/* Labels of DIFFERENT lengths (for example an s127 execution label beside a one-line name): use
+   <table class="sigtable uneven"> to reserve 5 label lines so both signature lines stay level.
+   Not the default: on equal one-line labels the reserve adds ~21 mm of empty space. */
+table.sigtable.uneven .siglabel { min-height: 7.4em; }  /* 5 lines x 1.45 line-height */
+.sigtag, .datetag { white-space: nowrap; }      /* a wrapped white tag paints over the rule below it */
+
+/* Witness line under a personal deed signature. */
+.witness { margin-top: 10pt; font-size: 9pt; }

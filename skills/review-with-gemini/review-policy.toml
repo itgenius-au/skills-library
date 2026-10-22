@@ -1,0 +1,29 @@
+# Read-only policy for the review-with-gemini skill.
+#
+# Gemini reviews what it is given and reads files in the workspace. It never
+# runs commands and never writes. The master agent (the calling Claude session) runs git and any
+# other command, and passes the output in the prompt or on stdin.
+#
+# This denies tools by NAME. There is no regex, so shell quoting or option
+# spelling tricks cannot get around it. A --policy file ranks above Gemini's
+# built-in yolo rule, so this deny holds even if yolo is switched on.
+#
+# Why the shell is off: red-team testing showed that a shell allow-list for
+# "read-only" git commands cannot be made safe (quote/escape tricks rebuild
+# denied options, git grep -O and repo diff drivers run programs, and
+# git diff --no-index reads files outside the workspace).
+
+[[rule]]
+toolName = ["run_shell_command", "write_file", "replace", "save_memory"]
+decision = "deny"
+priority = 900
+denyMessage = "review-with-gemini is read-only: no shell commands and no file writes. Say which command you need and the master agent will run it."
+
+# No web search. In practice this tool looped on HTTP 500 retries for the whole
+# panel time budget and the leg returned no findings. A review reads the repo
+# and the material it is given; it does not need the web.
+[[rule]]
+toolName = ["google_web_search"]
+decision = "deny"
+priority = 900
+denyMessage = "review-with-gemini does not search the web. Review the repository files and the material in the prompt; say which outside fact you need and the master agent will fetch it."

@@ -13,6 +13,8 @@ A discipline for turning "it's broken" into a verified root-cause fix, without g
 
 Do not change code to fix a bug until you can reproduce it and you have evidence for the cause. A fix applied to an unreproduced bug, or to a symptom, is a guess: it either does nothing, hides the problem, or moves it. Guessing feels faster and is almost always slower.
 
+**A fix that fails the same way twice is the same guess repeated.** On the second identical failure (same root cause, not just the same test name), stop retrying and diagnose off the failing path - never spend another attempt on the unchanged cause. This is the escape hatch the bounded build/QA loops (`dev-auto-build`, `dev-qa-verify`) route into when a fix-run or review cycle repeats.
+
 ## The five steps
 
 Work them in order. Create a todo per step and do not skip ahead - a fix that jumps from step 1 to step 4 is the shotgun anti-pattern.
@@ -53,6 +55,31 @@ Fix the cause you proved, not the symptom. A clamp on a bad value, a retry aroun
 | "The docs / comment say it works this way" | Docs are a hypothesis. Measure the live value (step 3). |
 | "Tests pass now, so it's fixed" | Did you re-run the exact reproduction and add a regression test? (step 5) |
 | "Let me change a few things and re-run" | Change ONE thing at a time, or you cannot attribute the result. |
+| "It failed again, the same way - let me retry" | A second identical failure means the approach is wrong, not that it needs one more go. Stop retrying; diagnose off the failing path (one hypothesis, proven against live state) before the next attempt. |
+
+## Recipe: native crashes / silent 5xx on a container service
+
+A worked instance of steps 1-3 and 5 for a containerised service that dies on a native signal (`Container
+terminated on signal 11/6`, `Uncaught signal`, glibc `free(): corrupted ...`) with no Python stack
+trace. It can surface a two-threads-on-one-socket race quickly. In order:
+
+1. **Histogram crash times by minute-of-quarter-hour (or hour).** A pile-up just after
+   :00/:15/:30/:45 points at a SCHEDULED trigger (cron, sweep, poller), not a random race.
+2. **Join each crash to the 5xx requests on the same `labels.instanceId` within ~20 s.** If most
+   crashed instances had NO request in flight, the cause is background work, not a handler.
+3. **Tail the last ~90 s of ALL logs on each crashed instance.** What ran seconds before the crash
+   line (a timeout, a retry, a specific downstream call) is the lead.
+4. **Positive-control cohort split.** Crash rate of instances that logged the suspect event vs those
+   that did not (e.g. 68/69 vs 0/95), plus the event-to-crash gap distribution. Look for the same
+   race's non-fatal errors too (e.g. `SSLError` "record layer failure", `IncompleteRead`).
+5. **Reproduce in a subprocess**, driving the real code path against a local stub that stalls, so a
+   native crash shows as exit 134/139 instead of killing your test runner. Run it pre-fix (positive
+   control) and post-fix under the same setup.
+6. **Verify post-deploy with the SAME positive control**: the trigger still fires, the crashes and the
+   non-fatal errors are gone.
+
+Not every container-platform 503 is your code: a ~30 s 503 with NO app log, on an instance whose next line is
+"Starting new instance. Reason: AUTOSCALING", is a cold-start queue timeout.
 
 ## Relationship to other skills
 

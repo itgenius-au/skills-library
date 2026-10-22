@@ -7,20 +7,32 @@ description: "Green-lane loop that sweeps your code repos, runs each repo's OWN 
 
 Run every code repo's own gates, produce one health map, and (optionally) auto-fix the fixable failures into push-ready branches. This is a consumer of `dev-auto-build` and a standing green-lane loop.
 
-**Nothing leaves the machine.** Every fix lands on a feature branch in an isolated worktree. The sweep never pushes, merges, or deploys. the user reviews the report and the branches, then approves the batch.
+**Nothing leaves the machine.** Every fix lands on a feature branch in an isolated worktree. The sweep never pushes, merges, or deploys. The user reviews the report and the branches, then approves the batch.
 
 ## Modes
 
 - `--report-only` (default, and the mandatory first live run): run each repo's gates and classify. No fixing. Produces the health map so you can see what is red before spending build/review budget.
 - `--fix`: for each repo failing its gates, classify the failure; if it is fixable green/yellow-lane, generate a minimal fix-plan and invoke `dev-auto-build` on that repo. Red-lane failures are reported and skipped.
 
+## Setup (once)
+
+The sweep needs a folder that holds your repos. Either pass `--root <dir>` on each run, or copy `templates/repo-health-sweep.config.example.json` to `~/.claude/repo-health-sweep.config.json` and set `root` to that folder (an absolute path). With neither, the discovery script exits 2 and tells you what to set.
+
+Each repo declares its gates on one line in its `.claude/CLAUDE.md`. See [`references/gate-lines.md`](references/gate-lines.md) for the format and the opt-out line.
+
 ## Flow
 
-1. **Discover targets:** list the code repos that declare their own gates, excluding
-   paused / skeleton / no-gate repos (e.g. paused projects, skeleton repos, an empty
-   CLAUDE.md). A small discovery script that emits them as JSON keeps this repeatable.
+1. **Discover targets:** list the code repos that declare their own gates. A repo opts
+   out by putting `Health sweep: skip - <reason>` at the start of a line in its
+   `.claude/CLAUDE.md`. Run `bash "${CLAUDE_SKILL_DIR}/scripts/discover-targets.sh"`; add
+   `--root <dir>` when the user names a root, otherwise it reads `root` from the config
+   file above. Keep the `bash` prefix. Claude Code fills in this skill's folder when the
+   skill loads; if you read this file from disk, the path still shows the raw
+   `CLAUDE_SKILL_DIR` variable, so replace it with the folder that holds this SKILL.md.
 2. **Per repo, in an isolated worktree, bounded concurrency 3:**
-   - Run the repo's own gates (lint, typecheck, tests, build).
+   - Run the repo's own gates (lint, typecheck, tests) with
+     `bash "${CLAUDE_SKILL_DIR}/scripts/run-gates.sh" <REPO>`, where `<REPO>` is that
+     repo's worktree path, pasted literally.
    - `overall:pass` -> record green.
    - `overall:skip` -> record skipped (no gates).
    - `overall:fail`:
@@ -36,16 +48,17 @@ Inherits every `dev-auto-build` invariant: never push/merge/deploy; never edit s
 - **Cost cap:** default ~2M tokens for a full `--fix` sweep. On breach, STOP and report what was done and what remains. `--report-only` is cheap (no Codex/review calls) and is not capped.
 - **Isolation:** each repo's work is in its own worktree. If you need to exercise a fix path on an all-green fleet for testing, plant the failure in a scratch worktree, never the main checkout.
 
-## Scheduling (later, v3)
+## Scheduling (later)
 
-Designed to be schedulable: a weekly `--report-only` (or a scoped `--fix`) routine with exception-only output is the intended scheduled use. Do not wire a cron until you opt in; when you do, use the `schedule` skill and keep the output exception-based.
+Designed to be schedulable: a weekly `--report-only` (or a scoped `--fix`) routine with exception-only output is the intended scheduled use. Do not wire a scheduler until you opt in; when you do, keep the output exception-based.
 
-## Known limitation (v1): cold checkouts
+## Known limitation: cold checkouts
 
-A gate run from a cold checkout fails on missing dependencies, not code (`uv run pytest` needs `uv sync`; `npm test`/`npm run lint` need `npm ci`). A cold sample can show every repo `fail` from a cold state, with an accurate per-gate breakdown (e.g. one repo's test+lint pass, typecheck fail). So a v1 `--report-only` red means "not green from cold" and should not be read as "the code is broken" until deps are installed. **v2:** run the repo's dependency install first, or classify `env-fail` (deps/toolchain) vs `code-fail`, so a red is trustworthy before `--fix` spends build budget on it.
+A gate run from a cold checkout fails on missing dependencies, not code (`uv run pytest` needs `uv sync`; `npm test`/`npm run lint` need `npm ci`). A cold sample can show every repo `fail` from a cold state, with an accurate per-gate breakdown (e.g. one repo's test+lint pass, typecheck fail). So a `--report-only` red means "not green from cold" and should not be read as "the code is broken" until deps are installed. Install each repo's dependencies first, or classify `env-fail` (deps/toolchain) vs `code-fail`, so a red is trustworthy before `--fix` spends build budget on it.
 
 ## Relationship to other skills
 
 - `dev-auto-build`: the engine this loop calls per failing repo.
-- a discovery step and a gate-runner: small helpers you provide for listing repos and running each repo's gates.
+- bundled helpers: `scripts/discover-targets.sh` lists repos (from `--root` or the config file), and `scripts/run-gates.sh <REPO>` runs one repo's declared gates and prints one JSON line. Self-test: `bash scripts/tests/run-tests.sh`.
+- gate declaration and opt-out format: [`references/gate-lines.md`](references/gate-lines.md).
 - your other audit skills: candidates to become scheduled maintainer routines the same way.

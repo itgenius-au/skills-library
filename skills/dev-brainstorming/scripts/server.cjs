@@ -1,3 +1,5 @@
+// Credit: adapted from the visual companion in superpowers:brainstorming by Jesse Vincent
+// (https://github.com/obra/superpowers), MIT licensed. See THIRD_PARTY_NOTICES.md.
 const crypto = require('crypto');
 const http = require('http');
 const fs = require('fs');

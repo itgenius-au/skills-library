@@ -1,5 +1,7 @@
 # Visual Companion Guide
 
+> Credit: adapted from the visual companion in `superpowers:brainstorming` by Jesse Vincent (https://github.com/obra/superpowers), MIT licensed. See [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md).
+
 Browser-based visual brainstorming companion for showing mockups, diagrams, and options.
 
 ## When to Use
