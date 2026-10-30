@@ -7,7 +7,8 @@ usage: redact_doc.py <file> --out <dir> [--patterns <file>] [--extra <literal> .
        redact_doc.py <file> --check <dir-or-file> [--patterns <file>] [--extra <literal> ...]
 
   <file>      the original document (UTF-8 text: a plan, decision, or legal or tax document)
-  --out       the subject folder for the legs (in your scratch directory); the copy is <out>/<basename>
+  --out       the subject folder for the legs (in your scratch directory); the copy is <out>/<basename>,
+              with the same patterns and extras applied to the basename, because file names reach the legs
   --patterns  a patterns file (default: redact_doc_patterns.txt next to this script). One pattern
               per line, `[PLACEHOLDER] <python regex>`; `#` lines and blank lines are skipped.
               Every pattern runs on the original; overlapping matches merge into one placeholder
@@ -127,7 +128,7 @@ def check(original: str, target: Path, rules) -> None:
     for path in files:
         text = path.read_bytes().decode("utf-8", errors="replace")
         for regex, label in needles:
-            found = len(regex.findall(text))
+            found = len(regex.findall(text)) + len(regex.findall(path.name))
             if found:
                 hits += found
                 print(f"HIT {path}: {label} x{found}")
@@ -152,7 +153,8 @@ def main() -> None:
         fail("--out <dir> is required (or --check <dir> after the panel)")
 
     # samefile also catches a symlink or hard link to the original sitting at <out>/<basename>.
-    dest = args.out.resolve() / args.file.name
+    # The name is redacted too: review packets print each file's path, so a name in it would leak.
+    dest = args.out.resolve() / redact(args.file.name, rules)[0]
     if dest == args.file.resolve() or (dest.exists() and dest.samefile(args.file)):
         fail(f"--out {args.out} would overwrite the original; pick a scratch subject folder")
 

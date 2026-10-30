@@ -404,3 +404,34 @@ def test_default_patterns_file_ships_next_to_the_script():
     labels = {ln.split()[0] for ln in lines}
     assert {"[IBAN]", "[NIE]", "[NIF]", "[CIF]", "[VAT-ID]", "[email]", "[drive-link]",
             "[drive-id]", "[gmail-id]"} <= labels
+
+
+def test_an_extra_in_the_file_name_is_redacted_from_the_copy_name(tmp_path):
+    src = tmp_path / "Fake Person-tax.md"
+    src.write_text("Fake Person owes tax.\n", encoding="utf-8")
+    out = tmp_path / "out"
+    result = run(str(src), "--out", str(out), "--extra", "Fake Person")
+    assert result.returncode == 0
+    names = [p.name for p in out.iterdir()]
+    assert names == ["[extra-1]-tax.md"]
+    assert "Fake Person" not in result.stdout
+
+
+def test_a_file_name_with_no_value_stays_as_it_is(tmp_path):
+    src = tmp_path / "plan.md"
+    src.write_text("Fake Person owes tax.\n", encoding="utf-8")
+    out = tmp_path / "out"
+    assert run(str(src), "--out", str(out), "--extra", "Fake Person").returncode == 0
+    assert [p.name for p in out.iterdir()] == ["plan.md"]
+
+
+def test_check_finds_a_raw_value_in_a_file_name(tmp_path):
+    src = tmp_path / "plan.md"
+    src.write_text("Fake Person owes tax.\n", encoding="utf-8")
+    legs = tmp_path / "legs"
+    legs.mkdir()
+    (legs / "fake person notes.md").write_text("clean text\n", encoding="utf-8")
+    result = run(str(src), "--check", str(legs), "--extra", "Fake Person")
+    assert result.returncode == 1
+    assert "HIT" in result.stdout
+
