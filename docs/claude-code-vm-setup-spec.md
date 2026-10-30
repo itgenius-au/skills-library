@@ -415,7 +415,7 @@ Remote Control. **[docs]**
 
 ```bash
 claude auth status --text
-jq '.oauthAccount | {emailAddress, organizationType, organizationUuid}' ~/.claude.json
+jq '.oauthAccount | {emailAddress, accountUuid, organizationType, organizationUuid}' ~/.claude.json
 stat -c '%a %U' ~/.claude/.credentials.json
 env | grep -E '^(ANTHROPIC_API_KEY|ANTHROPIC_BASE_URL|CLAUDE_CODE_OAUTH_TOKEN)=' | cut -d= -f1
 ```
@@ -667,10 +667,12 @@ Follow section 6 for the new user, with these additions.
    Watch the inner PID, not only `MainPID`. The wrapper can stay up while the server restarts.
    `daemon-reload` does not disturb running units. **[ran]**
 
-3. **Compare logins by organization, not by email or environment ID.** Read
-   `organizationUuid` from each account's `~/.claude.json`. It must differ between accounts.
-   An environment ID follows a local pointer file. It can survive an account switch, so it
-   proves nothing about the account. **[ran]**
+3. **Compare logins by their account fields, not by environment ID.** Read `oauthAccount` in each
+   account's `~/.claude.json`. `accountUuid` must differ between accounts, and
+   `organizationUuid` must be the organization you expect for that account. Two personal plans
+   have different organizations. Two seats in one Team org share one, and that is correct. An
+   environment ID follows a local pointer file. It can survive an account switch, so it proves
+   nothing about the account. **[ran]**
 4. **Budget memory.** See section 9.4.
 5. **Turn off the in-app updater** and add the plugin line (section 8).
 6. **Log in every other CLI.** Codex, for example, stores its login per user. A new account
@@ -1251,7 +1253,7 @@ tmux new -d -s reattach "cd <a trusted folder> && claude remote-control --sessio
 
 - [ ] The unit is active, with `NRestarts=0` and a stable inner PID.
 - [ ] `claude auth status --text` shows the expected email and organization.
-- [ ] `organizationUuid` differs from every other account.
+- [ ] `accountUuid` differs from every other account, and `organizationUuid` is the one you expect.
 - [ ] `sudo -l -U <user>` says no sudo, and `id` shows no sudo-like group.
 - [ ] The running server has no sudo group: `ps -o supgrp= -p <MainPID>`.
 - [ ] You chose the permission mode on purpose, and you read section 12.
