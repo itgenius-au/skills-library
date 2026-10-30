@@ -504,6 +504,29 @@ def test_wrap_done_then_a_queued_message_is_running(iso):
     assert R.wrap_state("u-q00000", WRAP_MARK)[0] == "RUNNING"
 
 
+def _queued(**attachment):
+    return {"type": "attachment", "attachment": {"type": "queued_command", "commandMode": "prompt",
+                                                 "prompt": "one more thing", **attachment}}
+
+
+def test_wrap_done_then_a_human_queued_attachment_is_running(iso):
+    _transcript(iso, "u-h", [_user(WRAP_MARK), _asst("Session Wrap done"), _queued(origin={"kind": "human"})])
+    _job(iso, "u-h00000", "u-h")
+    assert R.wrap_state("u-h00000", WRAP_MARK)[0] == "RUNNING"
+
+
+def test_wrap_done_then_a_human_turn_flag_attachment_is_running(iso):
+    _transcript(iso, "u-f", [_user(WRAP_MARK), _asst("Session Wrap done"), _queued(humanTurn=True)])
+    _job(iso, "u-f00000", "u-f")
+    assert R.wrap_state("u-f00000", WRAP_MARK)[0] == "RUNNING"
+
+
+def test_a_non_human_queued_attachment_does_not_reopen_a_wrap(iso):
+    _transcript(iso, "u-n", [_user(WRAP_MARK), _asst("Session Wrap done"), _queued(origin={"kind": "task"})])
+    _job(iso, "u-n00000", "u-n")
+    assert R.wrap_state("u-n00000", WRAP_MARK)[0] == "DONE"
+
+
 def test_wrap_done_after_the_new_message_is_answered_is_done_again(iso):
     _transcript(iso, "u-a", [_user(WRAP_MARK), _asst("Session Wrap done"), _user("and this?"),
                              _asst("answered.\n\nSession Wrap done")])

@@ -231,10 +231,22 @@ def review_reply(entries, mark=DEFAULT_MARK):
     return "\n\n".join(texts), tools, ""
 
 
+def is_human_queued(e):
+    """A message the user sent while the session was busy. It is stored as an attachment record, not a
+    `user` record. Task notifications and other non-human queued items do not count."""
+    att = e.get("attachment")
+    if e.get("type") != "attachment" or not isinstance(att, dict):
+        return False
+    if att.get("type") != "queued_command" or att.get("commandMode") != "prompt":
+        return False
+    origin = att.get("origin")
+    return (isinstance(origin, dict) and origin.get("kind") == "human") or att.get("humanTurn") is True
+
+
 def is_new_turn(e):
     """A message that asks the session for more: a queued message, or a user record that is not only
     tool results (a typed or delivered message)."""
-    if e.get("type") == "queue-operation":
+    if e.get("type") == "queue-operation" or is_human_queued(e):
         return True
     if e.get("type") != "user":
         return False
