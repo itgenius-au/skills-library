@@ -76,7 +76,7 @@ These are the rules the wrapper enforces for you. You get them for free by calli
 
 > **No first-output watchdog (unlike `codex-exec.sh`).** `claude -p --output-format text` emits its whole answer only at COMPLETION, not streamed - so "no output yet" is the normal state of a healthy review. A first-output watchdog would false-kill every real review. The wrapper keeps only the hard `--timeout` ceiling.
 
-> **The reviewer cannot run a test suite or a background task.** It has no shell. A shell-capable reviewer once started the full suite as a background task under plan mode and ended its turn waiting for it, returning no review. Give it the gate results you already have (suite counts, lint, mutation results) as stated evidence. If it needs test output, run the tests yourself and hand it the log.
+> **The reviewer cannot run a test suite or a background task.** It has no shell. A shell-capable reviewer once started the full suite as a background task under plan mode and ended its turn waiting for it, returning no review (a background-and-return; see the `review-swarm` skill's Step 3, in its `references/subagent-legs.md`). Give it the gate results you already have (suite counts, lint, mutation results) as stated evidence. If it needs test output, run the tests yourself and hand it the log.
 
 ## When to Use
 
@@ -374,7 +374,7 @@ The reviewer has no Agent tool (`--tools Read,Grep,Glob`), so it cannot spawn su
 /review-with-claude code                       # review uncommitted changes
 /review-with-claude code src/app/billing.ts    # review a specific file
 /review-with-claude decision "Firestore -> Postgres?"
-/review-with-claude plan docs/plans/2026-09-02-thing.md
+/review-with-claude plan docs/plans/example-plan.md
 /review-with-claude build                      # audit branch vs main
 /review-with-claude codebase "the auth module"
 ```

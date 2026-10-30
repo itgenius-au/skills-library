@@ -1,0 +1,46 @@
+# Default patterns for redact_doc.py (review-swarm doc mode).
+# One pattern per line: [PLACEHOLDER] <python regex>. The rest of the line is the regex.
+# Every pattern runs on the original text. Overlapping matches merge into one placeholder, the
+# longest match's (the earlier line wins a tie), so order matters only for ties.
+# Generic formats only (Spanish and EU identifier formats, emails, Google Drive and Gmail ids).
+# A person-specific value (a registry code, a name) goes in --extra, and another locale's
+# formats go in your own file passed with --patterns, never here.
+# Boundaries are (?<![A-Za-z0-9]) and (?![A-Za-z0-9]), not \b: \b treats "_" as a word
+# character, so a value in Markdown emphasis (_X0000000T_) would slip through.
+
+# Spanish IBAN: ES (any case) + 2 check digits + 20 digits in any grouping; spaces (also
+# no-break), hyphens or none.
+[IBAN] (?<![A-Za-z0-9])[Ee][Ss]\d{2}(?:[ \u00a0\u202f-]*\d){20}(?![A-Za-z0-9])
+# Masked Spanish IBAN. Two shapes, each ending on its last digit group, so a full stop or an
+# amount after it stays: an ellipsis (ES12...3456, ES12 3456 ... 7890), or up to 4 groups of
+# 4 digits or mask characters then the last digits (ES12 **** 3456, ES00 **** 5678 **** **** 7890).
+[IBAN] (?<![A-Za-z0-9])[Ee][Ss]\d{2}(?:[ \u00a0\u202f-]*\d{4}){0,4}[ \u00a0\u202f-]*(?:\.{2,}|\u2026)[ \u00a0\u202f-]*\d{2,4}(?![A-Za-z0-9])
+[IBAN] (?<![A-Za-z0-9])[Ee][Ss]\d{2}(?=(?:[ \u00a0\u202f-]*\d{4}){0,3}[ \u00a0\u202f-]*[*xX\u2022]{2,4})(?:[ \u00a0\u202f-]*(?:\d{4}|[*xX\u2022]{2,4})){1,4}[ \u00a0\u202f-]*\d{2,4}(?![A-Za-z0-9])
+# EU VAT id, any case, an optional space after the country code: the code + 8 to 12 characters
+# with at least 6 digits (ESB12345678, DE 123456789, IE0A00000A, NL123456789B01), or RO + 2 to 10
+# digits (Romania has short numbers). The 6 digits keep ordinary words (detail2024) out.
+[VAT-ID] (?i)(?<![A-Z0-9])(?:RO[ \u00a0]?\d{2,10}|(?:AT|BE|BG|CY|CZ|DE|DK|EE|EL|ES|FI|FR|HR|HU|IE|IT|LT|LU|LV|MT|NL|PL|PT|RO|SE|SI|SK|XI)[ \u00a0]?(?=(?:[0-9A-Z+*]*\d){6})[0-9A-Z+*]{8,12})(?![A-Z0-9])
+# Spanish ids match in any case (x0000000t).
+# NIE: X, Y or Z + 7 digits (8 in old numbers) + letter.
+[NIE] (?i)(?<![A-Z0-9])[XYZ]-?\d{7,8}-?[A-Z](?![A-Z0-9])
+# CIF: organisation letter + 7 digits + control digit or letter.
+[CIF] (?i)(?<![A-Z0-9])[ABCDEFGHJNPQRSUVW]-?\d{7}[0-9A-J](?![A-Z0-9])
+# NIF / DNI: 8 digits + letter; K, L or M + 7 digits + letter.
+[NIF] (?i)(?<![A-Z0-9])(?:\d{8}|[KLM]-?\d{7})-?[A-Z](?![A-Z0-9])
+# Email: a plain local part (every RFC 5322 atext character: ! # $ % & ' * + / = ? ^ _ ` { | } ~ -)
+# or a quoted one ("fake.person"@..., escapes and @ allowed inside); a domain name or an
+# address literal (fake@[192.0.2.1]).
+[email] (?:"(?:[^"\\\r\n]|\\.){1,64}"|(?<![A-Za-z0-9.!#$%&*+/=?^`{|}~-])[A-Za-z0-9!#$%&*+/=?^`{|}~-][\w.!#$%&'*+/=?^`{|}~-]*)@(?:[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}|\[[^\]\s]{1,64}\])
+# Google Drive and Docs links, and the id inside one (after /d/, /folders/ or id=) whatever its
+# shape (10+ id characters; it also fires on /d/ or id= in other links). Every rule runs on the
+# original, so --check also searches for that id on its own.
+[drive-link] (?:https?://)?(?:drive|docs)\.google\.com/[^\s)\]>"'`]+
+[drive-id] (?:(?<=/d/)|(?<=/folders/)|(?<=[?&]id=))[A-Za-z0-9_-]{10,}
+# Bare Drive file id: 28 (legacy 0B...), 33 or 44 characters, with an uppercase and a lowercase
+# letter, and not starting with a date, so a git SHA (hex) or a dated plan slug stays. An id of
+# another length is only found inside a Drive link (above): read the copy for bare ones.
+# "_" may sit around it (Markdown emphasis) or inside it; the longest length is tried first.
+[drive-id] (?<![A-Za-z0-9-])(?!\d{4}-\d{2}-\d{2})(?=[A-Za-z0-9_-]*[A-Z])(?=[A-Za-z0-9_-]*[a-z])(?:[A-Za-z0-9_-]{44}|[A-Za-z0-9_-]{33}|[A-Za-z0-9_-]{28})(?![A-Za-z0-9-])
+# Gmail message id: 16 hex characters. A 16-character git abbreviation is redacted too (accepted:
+# full 40-character SHAs stay).
+[gmail-id] (?<![A-Za-z0-9])[0-9a-fA-F]{16}(?![A-Za-z0-9])

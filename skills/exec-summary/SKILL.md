@@ -1,6 +1,6 @@
 ---
 name: exec-summary
-description: "Turn complex content into a short plain-language executive summary in Simplified Technical English: 3-5 key points, numbered decisions each with a recommendation, next steps, then the bottom line and a 'go' reply line. Use it WHENEVER the user asks for a summary or recap, asks where the current work stands, asks for a simpler or shorter version, or says they are confused, even mid-task after a long plan, audit, or table of numbers. Not for session wraps or hand-offs (session-wrap), status across many sessions (session-status-sweep), marketing copy (copy-humanizer), or shortening code. Triggers on: executive summary, exec summary, exact summary, summarize, summarise, summary please, recap, catch me up, where are we, where are we now, where are we at, where are we on this, what are we doing, what's left, where did we leave off, status update, what's happening here, simpler, too technical, too long, I don't understand, I'm confused, plain english, bottom line, tl;dr, in bullets, what does this mean."
+description: "Turn complex content into a short plain-language executive summary in Simplified Technical English: key points, numbered decisions each with a recommendation, next steps, then the bottom line and a 'go' reply line. Use it WHENEVER the user asks for a summary or recap, asks where the work stands, asks for a simpler version, or says they are confused, even mid-task after a long plan or audit, or when long research or review ends in approvals. Not for session wraps or hand-offs (session-wrap), status across many sessions (session-status-sweep), marketing copy (copy-humanizer), or shortening code. Triggers on: executive summary, exec summary, exact summary, summarize, summarise, summary please, recap, catch me up, where are we, where are we now, where are we at, where are we on this, what are we doing, what's left, where did we leave off, status update, what's happening here, simpler, too technical, too long, I don't understand, I'm confused, plain english, bottom line, tl;dr, in bullets, what does this mean."
 argument-hint: "[blank = the current conversation, or a file / link / pasted text]"
 ---
 
@@ -13,6 +13,8 @@ Give the reader the answer and the decision in 30 seconds, in plain words.
 ## When it fires
 
 The typical moment: Claude just produced a long technical turn (a diagnosis, a plan, a spec, an audit, a table of numbers). The user must now approve, pick an option, or sign off. They ask for "an executive summary", "simpler", or say "I don't understand".
+
+It also fires when a long research or review turn ends with approvals for the reader, even if the reader did not ask for a summary.
 
 A status check also fires it: "where are we?", "what are we doing?", "what's left?". Then the source is the current state of the task: what is done, what is in progress, and what waits on the reader.
 
@@ -31,8 +33,9 @@ Before you write, find these in the source:
 3. **The decision the reader owns,** and the recommendation for each. A real choice (product, money, risk, trust). Not "may I proceed?".
 4. **What happens next,** and who does it.
 
-Then check four honesty points. These go first in Key points, in bold, if they apply:
+Then check five honesty points. These go first in Key points, in bold, if they apply:
 
+- **Who pays.** If a decision moves money, state who pays, what the reader personally pays, and "out of pocket: yes" or "out of pocket: no".
 - **Anything done without approval**, or anything irreversible (a deploy, a send, a delete, a charge). If something was done without approval, the decision section also asks: keep it or undo it?
 - **Any risk, cost, or bad news.** State it plainly. Do not soften it.
 - **Anything not verified.** Say "not yet verified". Do not present a guess as a fact.
@@ -60,9 +63,9 @@ Reply "go" to accept every recommendation, or answer by number.
 ```
 
 - **The bottom line goes last,** just above the reply line, every time. The reader sees it as they answer and does not scroll back up.
-- **Number every decision** (1, 2, 3), even when there is only one. Label named options A and B. The reader can then reply by number, for example "1: yes, 2: B".
+- **Number every decision** (1, 2, 3), even when there is only one. Label named options A and B. The reader can then reply by number, for example "1: yes, 2: B". Never cite a source document's own decision numbers (such as "D-3" or "item 12"): renumber 1, 2, 3 in the order you list them.
 - **Give a recommendation for every decision,** so the reader can accept them all at once. Use the source's recommendation where it has one. If the source gives none, recommend from the facts in the summary. If there is no basis for one, write "**No recommendation:** <why>" instead of inventing one, and name that item in the reply line (for example: Reply "go" to accept the recommendations, then answer 3).
-- **"go" is the approve-all reply.** It accepts every recommendation in that summary, and nothing outside it. "yes to all" means the same. "go" with named items (for example "go, 2: B") accepts every recommendation except the items named, which take the answer given. An item marked **No recommendation** still needs its own answer.
+- **"go" is the approve-all reply.** It accepts every recommendation in that summary, and nothing outside it. "yes to all" means the same. "go" with named items (for example "go, 2: B") accepts every recommendation except the items named, which take the answer given. An item marked **No recommendation** still needs its own answer. Never ask for a suffix to "go" (a plan id, "all", a name): when the message puts one plan or action on the table, a plain "go" approves it, also where the calling skill binds the approval to one plan id: the go applies to the plan id that message showed.
 - Most summaries have one decision. Never list more than three. If there is no decision, write `**Decision needed:** none.` The reader then knows you checked.
 - Aim for **100-200 words**. Go up to 300 only for a large plan or spec. Never make it longer than the source.
 - Write it in chat. Do not write a file unless the user asks.

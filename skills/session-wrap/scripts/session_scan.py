@@ -12,6 +12,7 @@ bounded digest.
 The bash wrapper (session-scan.sh) resolves git/worktree facts and passes them in;
 this core is pure and testable. Run `--self-test` for the positive + per-vector
 negative controls.
+
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from __future__ import annotations
 import argparse
 import collections
 import glob
+import hashlib
 import json
 import os
 import re
@@ -28,7 +30,7 @@ import tempfile
 # --- signal patterns -------------------------------------------------------
 
 # Explicit directives fire at n=1, matched on USER-role genuine turns only.
-# Conservative set: favour precision over recall (tune from real wraps).
+# Conservative set: favour precision over recall (tune against sample transcripts).
 DIRECTIVE_PATTERNS = [
     r"from now on",
     r"going forward",
@@ -64,6 +66,29 @@ DIRECTIVE_PATTERNS = [
     r"\bwho asked (?:you )?for\b",
     r"\bthat['’]?s not what i (?:asked|wanted)\b",
     r"\bnot what i (?:asked for|wanted)\b",
+    # Typed while a turn was running, for example: "Why didn't you follow the format?
+    # You're supposed to put the link inline."
+    # The user states the rule the agent broke, or asks why it was skipped.
+    # The "supposed to" form needs an action verb, so "you're supposed to get an email" is
+    # not flagged.
+    r"\byou(?:['’]re| are| were) (?:supposed|meant|required) to "
+    r"(?:put|use|post|run|check|include|add|read|ask|follow|send|update|make|call|verify|link|attach|"
+    r"do|create|write|save|open|start|show|give|tell|keep|set|log|record|reply|answer)\b",
+    r"\bwhy (?:didn['’]?t|did not) you\b",
+    # Indirect form only as a request ("tell me why you didn't ..."); a bare "why you
+    # didn't" is often an explanation ("that's why you didn't see it"), not a correction.
+    # A request needs "tell/show me" or a polite lead before "explain" ("thanks for
+    # explaining why you didn't ..." and "let me explain why you didn't ..." are not asks).
+    r"\b(?:(?:tell|show) me|(?:please|can you|could you|would you)(?: (?:just|kindly|also|now))? explain) "
+    r"why you (?:didn['’]?t|did not)\b",
+    # Each is anchored on a verb phrase that states a standing change, so chatter like
+    # "turn the heat into a skillet" (skill\b rejects skillet) or "let's focus on
+    # tidying five files at a time" stays quiet.
+    r"\b(?:turn|convert|make) [\w' -]{1,60}? into an? (?:[\w-]+ )?skill\b",
+    r"\b(?:they|you) should (?:actually |really |literally )?(?:run|use|do|follow)\b",
+    r"\bi meant\b.{0,80}?\b(?:run|use|do|not just)\b",
+    r"\bi(?:['’]d| would) prefer (?:you |just )",
+    r"\bplease (?:raise|lower|change|set) the\b",
 ]
 DIRECTIVE_RE = re.compile("|".join(f"(?:{p})" for p in DIRECTIVE_PATTERNS), re.I)
 
@@ -393,31 +418,93 @@ SUSPECT_MIN_TYPED_TURNS = 5
 TYPED_TURN_MIN_CHARS = 21
 
 
-def count_typed_turns(path: str) -> int:
-    """Genuine user turns whose authored text is longer than an ack, over the whole file."""
+def _size_kb(path: str) -> str:
+    """File size in KB as text, or "?" when the stat fails (never breaks the digest)."""
+    try:
+        return str(os.path.getsize(path) // 1024)
+    except OSError:
+        return "?"
+
+
+def record_dup_key(obj: dict):
+    """Identity of a record that can appear in more than one transcript file of one
+    session (a resumed session copies its early records into the new folder's file).
+    The uuid when present; else (timestamp, type, hash of the message content). A
+    record with neither a uuid nor a timestamp has no safe key, so it is never merged."""
+    try:
+        uid = obj.get("uuid")
+        # Only a non-empty string is a real uuid; a malformed one falls back to the
+        # timestamp key, so it can never share a key with a different record.
+        if isinstance(uid, str) and uid:
+            return ("uuid", uid)
+        ts = obj.get("timestamp")
+        if ts is None:
+            return None
+        blob = json.dumps(obj.get("message"), sort_keys=True, default=str)
+        return ("ts", json.dumps(ts, sort_keys=True, default=str), str(obj.get("type")),
+                hashlib.sha1(blob.encode("utf-8", "replace")).hexdigest())
+    except (TypeError, ValueError, RecursionError):
+        # Odd field types must not lose the whole digest: no key means never merged.
+        return None
+
+
+def count_typed_turns(paths) -> int:
+    """Genuine user turns whose authored text is longer than an ack, over the whole
+    file(s). Given several files, a record seen in more than one counts once."""
+    if isinstance(paths, str):
+        paths = [paths]
     n = 0
-    for _ln, obj in iter_records(path):
-        if is_non_genuine(obj) or record_role(obj) != "user":
-            continue
-        authored = " ".join(strip_injected(t) for t in text_blocks(obj)).strip()
-        if len(authored) >= TYPED_TURN_MIN_CHARS:
-            n += 1
+    first_file = {}            # key -> file that held it first
+    for path in paths:
+        for _ln, obj in iter_records(path):
+            if is_non_genuine(obj) or record_role(obj) != "user":
+                continue
+            if len(paths) > 1:
+                key = record_dup_key(obj)
+                if key is not None:
+                    # Repeats inside one file keep counting; only a copy in a
+                    # DIFFERENT file is a duplicate.
+                    if first_file.setdefault(key, path) != path:
+                        continue
+            authored = " ".join(strip_injected(t) for t in text_blocks(obj)).strip()
+            if len(authored) >= TYPED_TURN_MIN_CHARS:
+                n += 1
     return n
 
 
-def find_session_file(projects_dir: str, session_id: str | None) -> str | None:
-    """Find <session id>.jsonl in ANY folder under projects_dir. A session launched in
-    one folder that enters and exits worktrees keeps writing to the LAUNCH folder's
-    slug dir, so a cwd-derived slug can point at an empty folder. Returns None when the
-    id is empty, unsafe, or no file matches."""
+WEAK_MIN_CHARS = 61
+WEAK_MAX_LINES = 10
+
+
+def weak_typed_turns(paths):
+    """Up to WEAK_MAX_LINES typed human turns over 60 chars as (file, line, first 120
+    chars), for the deep pass to read when no directive pattern matched."""
+    out = []
+    for path in paths:
+        for ln, obj in iter_records(path):
+            if is_non_genuine(obj) or record_role(obj) != "user":
+                continue
+            authored = " ".join(strip_injected(t) for t in text_blocks(obj)).strip()
+            if len(authored) >= WEAK_MIN_CHARS:
+                out.append((path, ln, " ".join(authored.split())[:120]))
+                if len(out) >= WEAK_MAX_LINES:
+                    return out
+    return out
+
+
+def find_session_files(projects_dir: str, session_id: str | None) -> list[str]:
+    """Find EVERY <session id>.jsonl in any folder under projects_dir, oldest first. A
+    session launched in one folder that enters and exits worktrees keeps writing to the
+    LAUNCH folder's slug dir, so a cwd-derived slug can point at an empty folder. A
+    session that resumed in another worktree has the file in TWO folders: the old one
+    holds the early part, the new one a copy of it plus the resumed part. Returns []
+    when the id is empty, unsafe, or no file matches."""
     sid = (session_id or "").strip()
     if not sid or "/" in sid or "\\" in sid or sid.startswith("."):
-        return None
+        return []
     hits = [p for p in glob.glob(os.path.join(glob.escape(projects_dir), "*", f"{glob.escape(sid)}.jsonl"))
             if os.path.isfile(p)]
-    if not hits:
-        return None
-    return max(hits, key=lambda p: os.path.getmtime(p))
+    return sorted(hits, key=lambda p: (os.path.getmtime(p), p))
 
 
 def candidate_dirs(projects_dir: str, wt_path: str, main_path: str, parent_path: str):
@@ -472,19 +559,23 @@ def scan(wt_path, wt_branch, projects_dir, sessions_dir, main_path, parent_path,
     notes = []
     # Seed transcript by session id (CLAUDE_CODE_SESSION_ID), searched across every
     # project folder, BEFORE any cwd-based guessing. Fallback is the old behaviour.
-    env_file = None
+    env_files = []
     if env_session_id and env_session_id.strip():
-        env_file = find_session_file(projects_dir, env_session_id)
-        if env_file is None:
+        env_files = find_session_files(projects_dir, env_session_id)
+        if not env_files:
             notes.append(f"CLAUDE_CODE_SESSION_ID ({env_session_id.strip()[:8]}) matched no "
                          "transcript file; falling back to path-based discovery")
+        elif len(env_files) > 1:
+            listing = ", ".join(f"{f} ({_size_kb(f)} KB)" for f in env_files)
+            notes.append(f"session {env_session_id.strip()} has {len(env_files)} transcript "
+                         f"files: {listing}")
     # Not in a git work tree (empty path): there is no path identity, so only the
     # session-id transcript can be scanned (a wrap from a non-repo cwd
     # would otherwise skip the scan although the session id finds the transcript).
     if not wt_path:
-        if env_file is None:
+        if not env_files:
             return _emit(notes + ["not in a git work tree; deep scan skipped"], [], False, [])
-        notes.append("not in a git work tree: scanning only this session's transcript (by session id)")
+        notes.append("not in a git work tree: scanning only this session's transcripts (by session id)")
     seed_id = resolve_seed_session(wt_path, sessions_dir) if wt_path else None
     if wt_branch == "" and wt_path:
         notes.append("detached HEAD (empty branch): matching on path + session id only")
@@ -501,16 +592,14 @@ def scan(wt_path, wt_branch, projects_dir, sessions_dir, main_path, parent_path,
             if within_recency(path, cutoff):
                 narrowed.append(path)
 
-    included = []
-    if env_file:
-        included.append(env_file)
+    included = list(env_files)
     # In a main checkout (not a linked worktree) the path is in nearly every transcript that
     # ever ran there, so it identifies nothing: with a resolved session id, scan only that
     # transcript. In a linked worktree, sibling windows on the same worktree still stitch in.
     in_main_checkout = bool(main_path) and \
         os.path.realpath(wt_path or ".") == os.path.realpath(main_path)
-    if env_file and in_main_checkout:
-        notes.append("main checkout: scanning only this session's transcript (by session id)")
+    if env_files and in_main_checkout:
+        notes.append("main checkout: scanning only this session's transcripts (by session id)")
     else:
         for path in narrowed:
             if file_matches_identity(path, wt_path, wt_branch, seed_id):
@@ -548,7 +637,7 @@ def scan(wt_path, wt_branch, projects_dir, sessions_dir, main_path, parent_path,
     # Union records by message uuid across (resumed) files, keeping provenance. Count
     # signals ONLY from records whose active cwd is THIS worktree (span-level, not
     # whole-file), and per distinct turn/record (never per text block).
-    seen_uuids = set()
+    seen_keys = {}             # record_dup_key -> path where first seen
     directives = []            # (file, line, role, quote)
     corrections = 0
     corr_loc = None            # (file, line) of first correction
@@ -568,14 +657,17 @@ def scan(wt_path, wt_branch, projects_dir, sessions_dir, main_path, parent_path,
             cw = record_cwd(obj)
             if cw is not None:
                 active_cwd = cw
-            uid = obj.get("uuid")
-            if uid is not None:
-                if uid in seen_uuids:
+            key = record_dup_key(obj)
+            if key is not None:
+                # A uuid match is a duplicate anywhere (existing rule). The timestamp key
+                # is weaker, so it only merges records across DIFFERENT files.
+                first = seen_keys.get(key)
+                if first is not None and (key[0] == "uuid" or first != path):
                     continue
-                seen_uuids.add(uid)
+                seen_keys.setdefault(key, path)
             # The session-id transcript is this session end to end, whatever cwd a record
             # carries (it may have entered and left worktrees); other files stay cwd-filtered.
-            in_span = (active_cwd == wt_path) or (env_file is not None and path == env_file)
+            in_span = (active_cwd == wt_path) or (path in env_files)
             if not in_span:
                 continue
             # Compaction is a signal only when it belongs to THIS span. Record its
@@ -627,24 +719,35 @@ def scan(wt_path, wt_branch, projects_dir, sessions_dir, main_path, parent_path,
             inferred.append((f"repeated tool error x{c}: {short(err, 100)}", f, ln))
 
     deep = bool(directives) or bool(inferred) or compaction_seen or genuine_turns > 400
+    weak = []
     # Silence on a big transcript is suspect: it may be the wrong file or a wrong path.
-    seed_file = env_file
-    if not seed_file and seed_id:
+    seed_files = list(env_files)
+    if not seed_files and seed_id:
         for d in dirs:
             cand = os.path.join(d, f"{seed_id}.jsonl")
             if os.path.isfile(cand):
-                seed_file = cand
+                seed_files = [cand]
                 break
-    if not evidence and seed_file:
-        try:
-            size = os.path.getsize(seed_file)
-        except OSError:
-            size = 0
+    if not evidence and seed_files:
+        # Per-transcript gate: a copied history must not trip the warning by itself.
+        size = 0
+        for sf in seed_files:
+            try:
+                size = max(size, os.path.getsize(sf))
+            except OSError:
+                pass
         if size > SUSPECT_BYTES:
-            typed = count_typed_turns(seed_file)
+            typed = count_typed_turns(seed_files)
             if typed >= SUSPECT_MIN_TYPED_TURNS:
-                notes.append(f"SCAN-SUSPECT: 0 evidence on a {size // 1024} KB transcript; "
-                             "check the transcript path")
+                if env_files or seed_id:
+                    # The seed was resolved by session id, so the path is right: no
+                    # pattern matched. Point the deep pass at the typed turns instead.
+                    notes.append(f"0 directives matched {typed} typed user turns; review the "
+                                 "typed turns by hand (the transcript path is right)")
+                    weak = weak_typed_turns(seed_files)
+                else:
+                    notes.append(f"SCAN-SUSPECT: 0 evidence on a {size // 1024} KB transcript; "
+                                 "check the transcript path")
             else:
                 notes.append(f"0 evidence is expected: only {typed} typed user turns in the seed "
                              f"transcript (SCAN-SUSPECT needs {SUSPECT_MIN_TYPED_TURNS}+)")
@@ -652,10 +755,10 @@ def scan(wt_path, wt_branch, projects_dir, sessions_dir, main_path, parent_path,
         loc = f" at {compaction_loc[0]}:{compaction_loc[1]}" if compaction_loc else ""
         notes.append(f"compaction marker present (long/compacted session){loc}")
 
-    return _emit(notes, evidence[:cap], deep, inferred[:cap], spans)
+    return _emit(notes, evidence[:cap], deep, inferred[:cap], spans, weak)
 
 
-def _emit(notes, evidence, deep, inferred, spans=None):
+def _emit(notes, evidence, deep, inferred, spans=None, weak=None):
     lines = []
     for n in notes:
         lines.append(f"NOTE {n}")
@@ -671,6 +774,8 @@ def _emit(notes, evidence, deep, inferred, spans=None):
             lines.append(f"INFERRED {loc} | {text}")
         else:
             lines.append(f"INFERRED {item}")
+    for (f, ln, quote) in (weak or []):
+        lines.append(f"WEAK {f}:{ln} | {quote}")
     lines.append(f"DEEP_CANDIDATES={1 if deep else 0}")
     lines.append(f"EVIDENCE_COUNT={len(evidence)}")
     return "\n".join(lines), deep
@@ -870,6 +975,77 @@ def self_test() -> int:
         check("delivery_text_not_duplicated",
               sum(1 for o in recs for t in text_blocks(o) if t == "check the build") == 1)
 
+        # 1g) a correction typed while a turn was running must count as evidence.
+        # The record is a queued_command attachment; the harness wrapper ("The user sent a
+        # new message while you were working") sits in its `rendered` field and must never
+        # count as the user's words.
+        def _queued_wrapped(prompt, kind="human"):
+            rec = _queued(prompt, kind=kind)
+            # No injection tags around the sentinel: if `rendered` were ever read as user
+            # text, "from now on" would match and WRAPPERTEXT would show in the output.
+            rec["rendered"] = [{"content": "The user sent a new message while you were "
+                                           "working:\n" + prompt + "\n\nThis is how the "
+                                           "harness surfaces it. from now on always WRAPPERTEXT"}]
+            return rec
+        midturn_fix = ("Why didn't you run the tests first? You're supposed to run them "
+                       "before committing.")
+        clear()
+        write("SEED.jsonl", [_u("assistant", "Working.", cwd=wt),
+                             _queued_wrapped(midturn_fix),
+                             _u("assistant", "Sorry.", cwd=wt)])
+        out, deep = _run(wt, br, projects, sessions, now)
+        check("midturn_correction_flagged", "| user | directive |" in out and deep
+              and "run the tests first" in out and "\nEVIDENCE_COUNT=1" in out
+              and not re.search(r"EVIDENCE_COUNT=1\d", out))
+        check("midturn_correction_own_line", "SEED.jsonl:2 | user | directive |" in out)
+        check("midturn_wrapper_text_not_user_text", "WRAPPERTEXT" not in out
+              and "harness surfaces" not in out)
+        # The same words from a non-human origin (a task notification) are not the user's.
+        clear()
+        write("SEED.jsonl", [_u("assistant", "Working.", cwd=wt),
+                             _queued(midturn_fix, mode="task-notification", kind="task")])
+        out, deep = _run(wt, br, projects, sessions, now)
+        check("midturn_nonhuman_not_flagged", "| directive |" not in out and not deep)
+        # Typed-turn count: mid-turn human messages count toward SCAN-SUSPECT, and the
+        # delivered duplicate of a queued message counts once.
+        qpath = os.path.join(wt_dir, "SEED.jsonl")
+        clear()
+        write("SEED.jsonl", [_queued_wrapped(f"Typed while working, message number {i} here.")
+                             for i in range(5)])
+        check("midturn_counts_as_typed_turns", count_typed_turns(qpath) == 5)
+        write("SEED.jsonl", [_queued_wrapped(f"Typed while working, message number {i} here.", kind="task")
+                             for i in range(5)])
+        check("midturn_nonhuman_not_typed_turns", count_typed_turns(qpath) == 0)
+        write("SEED.jsonl", [_queued("A message the user typed while a turn ran."),
+                             _u("user", "A message the user typed while a turn ran.", cwd=wt)])
+        check("midturn_delivered_copy_counted_once", count_typed_turns(qpath) == 1)
+        # Phrases for the new patterns, and near-misses that must stay quiet.
+        for phrase in (
+            "You're supposed to put the link inline",
+            "you’re supposed to post it in the thread",
+            "You are supposed to run the tests first",
+            "Can you tell me why you didn't do that?",
+            "Please explain why you did not use the skill",
+            "Can you just explain why you didn't attach it?",
+            "Could you kindly explain why you didn't attach it?",
+            "Please just explain why you did not attach it",
+            "Why didn't you use the skill?",
+            "Why didn’t you check the log?",
+        ):
+            check("midturn_phrase:" + phrase[:30], DIRECTIVE_RE.search(phrase) is not None)
+        for phrase in (
+            "You're supposed to get an email from them tomorrow",
+            "He is supposed to put the link inline",
+            "Why did you pick that one?",
+            "I know why you chose it",
+            "Thanks, I understand why you didn't send the email. That was the right call.",
+            "The flag was off, that's why you didn't see the button",
+            "Thanks for explaining why you didn't attach it; that makes sense.",
+            "Let me explain why you didn't see the row",
+            "Let me just explain why you didn't see the row",
+        ):
+            check("midturn_near_miss:" + phrase[:30], DIRECTIVE_RE.search(phrase) is None)
+
         # 1b) named-skill directives, each alone.
         for i, phrase in enumerate([
             "Yeah, put in the report skill that totals must not be rounded.",
@@ -1049,7 +1225,7 @@ def self_test() -> int:
               "matched no transcript file" in out and "SPAN " not in out)
         out, _d = scan(wt, br, projects, sessions, "", "", 3650, 50, now, env_session_id="../x")
         check("env_unsafe_id_ignored", "matched no transcript file" in out)
-        check("find_session_file_empty", find_session_file(projects, "") is None)
+        check("find_session_file_empty", find_session_files(projects, "") == [])
         # SCAN-SUSPECT: big transcript with 0 evidence.
         os.remove(lp)
         big = os.path.join(launch_dir, "BIG.jsonl")
@@ -1057,8 +1233,114 @@ def self_test() -> int:
             fh.write(_mk([_u("user", "ok thanks " + "x" * 300, cwd=wt)] * 1000))
         os.utime(big, (now, now))
         out, _d = scan(wt, br, projects, sessions, "", "", 3650, 50, now, env_session_id="BIG")
-        check("scan_suspect_note", "NOTE SCAN-SUSPECT: 0 evidence on a" in out)
+        check("seed_resolved_zero_match_note",
+              "NOTE 0 directives matched 1000 typed user turns; review the typed turns by hand "
+              "(the transcript path is right)" in out and "check the transcript path" not in out)
+        check("weak_lines_capped_and_quoted",
+              len(re.findall(r"^WEAK ", out, re.M)) == 10 and "| ok thanks xxx" in out)
+        check("weak_lines_keep_counters_intact",
+              "EVIDENCE_COUNT=0" in out and "DEEP_CANDIDATES=0" in out
+              and "| directive |" not in out)
+        # Further phrasings that matched nothing, and two look-alikes that must not.
+        for i, (txt, want) in enumerate((
+                ("Can you turn the release checklist into a skill please", True),
+                ("When I said they should do a release check, I meant not just to type it. "
+                 "I mean they should actually run the release skill in full mode.", True),
+                ("please raise the retry limit to 5", True),
+                ("I would prefer just to post a one-line status. Could you set that up?", True),
+                ("Let's focus on tidying about five files at a time", False),
+                ("turn the heat into a skillet", False))):
+            check(f"directive_further_{i}", bool(DIRECTIVE_RE.search(txt)) == want)
         os.remove(big)
+        # T) one session id in TWO folders (resumed in another worktree): both files are
+        # scanned, a record copied into both counts once, and uuid-less records merge on
+        # (timestamp, type, content hash).
+        old_dir = os.path.join(projects, "-old-folder")
+        new_dir = os.path.join(projects, "-new-folder")
+        os.makedirs(old_dir, exist_ok=True)
+        os.makedirs(new_dir, exist_ok=True)
+        nots = {"type": "user", "cwd": wt, "timestamp": "2026-01-01T00:00:05Z",
+                "message": {"role": "user", "content": "Next time, update the skill with NOUUID."}}
+        old_recs = [_u("user", "From now on always run the smoke test.", cwd=wt, uuid="D1"), nots]
+        new_recs = [_u("user", "From now on always run the smoke test.", cwd=wt, uuid="D1"), nots,
+                    _u("assistant", "Resumed.", cwd=wt, uuid="A9")]
+        op, np_ = os.path.join(old_dir, "TWIN.jsonl"), os.path.join(new_dir, "TWIN.jsonl")
+        with open(op, "w") as fh:
+            fh.write(_mk(old_recs))
+        with open(np_, "w") as fh:
+            fh.write(_mk(new_recs))
+        os.utime(op, (now - 100, now - 100))
+        os.utime(np_, (now, now))
+        out, _d = scan(wt, br, projects, sessions, "", "", 3650, 50, now, env_session_id="TWIN")
+        check("two_folders_both_spans", f"SPAN {op}" in out and f"SPAN {np_}" in out)
+        check("two_folders_note", "NOTE session TWIN has 2 transcript files: " in out)
+        check("two_folders_dedup", out.count("| directive |") == 2
+              and "EVIDENCE_COUNT=2" in out and f"{op}:1 |" in out and f"{np_}:1 |" not in out)
+        check("two_folders_typed_turns_dedup", count_typed_turns([op, np_]) == 2)
+        os.remove(op)
+        os.remove(np_)
+        # T2) item 1: repeats of one uuid-less record INSIDE a file keep counting when an
+        # unrelated second file is added. Only a record seen in a DIFFERENT file is dropped.
+        rep_rec = {"type": "user", "cwd": wt, "timestamp": "2026-01-01T00:00:09Z",
+                   "message": {"role": "user", "content": "Please check the deploy log again."}}
+        fa, fb, fc = (os.path.join(old_dir, n) for n in ("RA.jsonl", "RB.jsonl", "RC.jsonl"))
+        with open(fa, "w") as fh:
+            fh.write(_mk([rep_rec] * 6))
+        with open(fb, "w") as fh:
+            fh.write(_mk([_u("user", "A different typed turn in another file.", cwd=wt)]))
+        with open(fc, "w") as fh:
+            fh.write(_mk([rep_rec]))
+        check("typed_turns_single_file_repeats", count_typed_turns([fa]) == 6)
+        check("typed_turns_unrelated_second_file_never_reduces", count_typed_turns([fa, fb]) == 7)
+        check("typed_turns_cross_file_copy_dropped", count_typed_turns([fa, fc]) == 6)
+        for f in (fa, fb, fc):
+            os.remove(f)
+        # T3) item 2: SCAN-SUSPECT gates on the LARGEST single file, so a transcript under
+        # the threshold plus an identical copy does not trip it.
+        half = [_u("user", f"typed turn number {i} with enough words", cwd=wt, uuid=f"HU{i}")
+                for i in range(6)]
+        half += [_u("assistant", "pad " + "z" * 900, cwd=wt, uuid=f"HP{i}") for i in range(150)]
+        ha, hb = os.path.join(old_dir, "HALF.jsonl"), os.path.join(new_dir, "HALF.jsonl")
+        for f in (ha, hb):
+            with open(f, "w") as fh:
+                fh.write(_mk(half))
+        os.utime(ha, (now - 100, now - 100))
+        os.utime(hb, (now, now))
+        check("half_files_each_under_threshold", os.path.getsize(ha) < SUSPECT_BYTES
+              < 2 * os.path.getsize(ha))
+        out, _d = scan(wt, br, projects, sessions, "", "", 3650, 50, now, env_session_id="HALF")
+        check("copy_does_not_trip_scan_suspect", "SCAN-SUSPECT" not in out)
+        os.remove(ha)
+        os.remove(hb)
+        # T4) item 4: an object-valued timestamp must not break the scan; a failed size
+        # lookup prints "?".
+        odd = {"type": "user", "cwd": wt, "timestamp": {"nested": [1, 2]},
+               "message": {"role": "user", "content": "From now on always check ODDTS first."}}
+        try:
+            hash(record_dup_key(odd))
+            key_ok = True
+        except TypeError:
+            key_ok = False
+        check("dup_key_object_timestamp_hashable", key_ok)
+        # A non-string uuid is malformed: it must not share a key with the string "1".
+        num_uuid = {"type": "user", "uuid": 1, "timestamp": "t1", "message": {"content": "a"}}
+        str_uuid = {"type": "user", "uuid": "1", "timestamp": "t2", "message": {"content": "b"}}
+        check("dup_key_numeric_uuid_not_merged_with_string",
+              record_dup_key(num_uuid) != record_dup_key(str_uuid))
+        oa, ob = os.path.join(old_dir, "ODD.jsonl"), os.path.join(new_dir, "ODD.jsonl")
+        for f in (oa, ob):
+            with open(f, "w") as fh:
+                fh.write(_mk([odd]))
+        os.utime(oa, (now - 100, now - 100))
+        os.utime(ob, (now, now))
+        try:
+            out, _d = scan(wt, br, projects, sessions, "", "", 3650, 50, now, env_session_id="ODD")
+        except Exception as exc:  # the digest must survive
+            out = "RAISED " + repr(exc)
+        check("object_timestamp_does_not_break_scan", "RAISED" not in out and out.count("| directive |") == 1)
+        check("size_kb_failure_prints_question_mark", _size_kb(os.path.join(tmp, "nope.jsonl")) == "?")
+        os.remove(oa)
+        os.remove(ob)
         # _emit never prints a SPAN for a missing file.
         check("emit_skips_missing_span",
               "SPAN " not in _emit([], [], False, [], [os.path.join(tmp, "missing.jsonl")])[0])
@@ -1141,7 +1423,7 @@ def self_test() -> int:
                 fh.write(_mk(recs))
             os.utime(few, (now, now))
             out, _d = scan(wt, br, projects, sessions, "", "", 3650, 50, now, env_session_id="FEW")
-            check(f"typed_turn_boundary_{n}", ("NOTE SCAN-SUSPECT" in out) == want)
+            check(f"typed_turn_boundary_{n}", ("NOTE 0 directives matched" in out) == want)
         os.remove(few)
         tt = os.path.join(launch_dir, "TT.jsonl")
         with open(tt, "w") as fh:
@@ -1175,7 +1457,7 @@ def self_test() -> int:
           "span-filter[mixed/mention] + resumed-union[unique-per-file] + per-turn-counting "
           "+ non-genuine-exclusion + middle-only[whole-file] + bridge-stub + detached-HEAD "
           "+ inferred-loc + no-quadratic-blowup + compaction + noise-errors + typed-turn-suspect "
-          "+ no-git-session-id)")
+          "+ no-git-session-id + mid-turn-user-message)")
     return 0
 
 

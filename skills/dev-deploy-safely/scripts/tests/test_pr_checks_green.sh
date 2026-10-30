@@ -29,12 +29,19 @@ pick() {
   cat "$FAKE_DIR/${list[$i]}.json"
 }
 if [ "${1}" = pr ]; then
+  if [ -n "${FAKE_NET_PR:-}" ] && [ "$(grep -c '^pr view' "$FAKE_LOG")" -le "$FAKE_NET_PR" ]; then
+    if [ -n "${FAKE_NET_MSG:-}" ]; then printf '%b\n' "$FAKE_NET_MSG" >&2; else echo 'Post "https://api.github.com/graphql": dial tcp 192.0.2.1:443: i/o timeout' >&2; fi
+    exit 1
+  fi
   [ "${FAKE_FAIL:-}" = pr ] && { echo "HTTP 404: Not Found" >&2; exit 1; }
   pick "$FAKE_PR" "^pr view"
   exit 0
 fi
 case "${2}" in
   */rules/branches/*)
+    if [ -n "${FAKE_NET_RULES:-}" ] && [ "$(grep -c 'rules/branches' "$FAKE_LOG")" -le "$FAKE_NET_RULES" ]; then
+      echo 'Get "https://api.github.com/repos/example/repo/rules/branches/main": net/http: TLS handshake timeout' >&2; exit 1
+    fi
     [ "${FAKE_FAIL:-}" = rules ] && { echo "HTTP 403: Forbidden" >&2; exit 1; }
     [ "${FAKE_FAIL:-}" = rules_free_plan ] && { echo '{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature."}'; echo "gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)" >&2; exit 1; }
     printf '%s\n' "${FAKE_RULES:-[]}" ;;
@@ -62,7 +69,7 @@ queued='{"__typename":"CheckRun","name":"deploy","status":"QUEUED","conclusion":
 fixture green "$(prj CLEAN "$ok")"
 fixture green_new_head "$(prj CLEAN "$ok" bbb222)"
 fixture green_plus_queued "$(prj BLOCKED "$ok,$queued")"
-fixture cancelled "$(prj UNKNOWN '{"__typename":"CheckRun","completedAt":"2026-01-02T10:15:00Z","conclusion":"CANCELLED","detailsUrl":"https://github.com/example/repo/actions/runs/1111111111/job/2222222222","name":"ci-checks","startedAt":"2026-01-02T10:00:00Z","status":"COMPLETED","workflowName":"ci-checks"}')"
+fixture cancelled "$(prj UNKNOWN '{"__typename":"CheckRun","completedAt":"2026-01-02T10:15:00Z","conclusion":"CANCELLED","detailsUrl":"https://github.com/example/repo/actions/runs/1111111111/job/2222222222","name":"ci","startedAt":"2026-01-02T10:00:00Z","status":"COMPLETED","workflowName":"ci"}')"
 fixture failed "$(prj BLOCKED "$ok"',{"__typename":"CheckRun","name":"tests","status":"COMPLETED","conclusion":"FAILURE"}')"
 fixture skipped "$(prj BLOCKED '{"__typename":"CheckRun","name":"tests","status":"COMPLETED","conclusion":"SKIPPED"}')"
 fixture pending "$(prj BLOCKED "$queued")"
@@ -93,6 +100,7 @@ check() {
   out=$(FAKE_PR="$fixtures" FAKE_DIR="$WORK" FAKE_LOG="$WORK/log" \
     PR_CHECKS_GH="$WORK/gh" PR_CHECKS_INTERVAL="${TEST_INTERVAL:-0}" PR_CHECKS_NONE_GRACE="${TEST_GRACE:-0}" \
     PR_CHECKS_NONE_SETTLE="${TEST_SETTLE:-0}" PR_CHECKS_WAIT_S="${TEST_WAIT_S:-}" \
+    PR_CHECKS_NET_SLEEP=0 PR_CHECKS_NET_TRIES="${TEST_NET_TRIES:-5}" \
     bash "$SUBJECT" "$@" 2> "$WORK/stderr")
   rc=$?
   printf '%s\n' "$out" > "$WORK/stdout"
@@ -119,7 +127,7 @@ expect_logged() {
 
 check "all checks succeeded" 0 "GREEN" "green" 12
 expect_stdout aaa111
-check "cancelled check is red (gh exits 0 here)" 1 "ci-checks: CANCELLED" "cancelled" 12
+check "cancelled check is red (gh exits 0 here)" 1 "ci: CANCELLED" "cancelled" 12
 check "cancelled check names the re-run" 1 "gh run rerun" "cancelled" 12
 check "one failure among successes" 1 "tests: FAILURE" "failed" 12
 check "skipped-only is not green" 1 "tests: SKIPPED" "skipped" 12
@@ -204,6 +212,37 @@ FAKE_FAIL="rules" check "required-check lookup error stops" 4 "HTTP 403" "green"
 FAKE_FAIL="rules_free_plan" check "a free-plan private repo has no rulesets" 0 "GREEN" "green" 12
 check "--repo is passed to gh pr view" 0 "GREEN" "green" 12 --repo example/repo
 expect_logged "pr view 12 --repo example/repo --json"
+
+# Network errors (an i/o timeout must stop as NETWORK, never read as "checks are not green").
+expect_calls() {  # expect_calls PATTERN COUNT
+  local n
+  n=$(grep -c "${1}" "$WORK/log")
+  if [ "$n" -ne "${2}" ]; then
+    printf 'FAIL want %s gh calls matching "%s", got %s\n' "${2}" "${1}" "$n"; cat "$WORK/log"
+    failures=$((failures + 1))
+  fi
+}
+FAKE_NET_PR=2 check "a network error on gh pr view is retried, then green" 0 "GREEN" "green" 12
+expect_stdout aaa111
+if ! grep -qF "gh network error, try 1 of 5" "$WORK/stderr"; then
+  printf 'FAIL the retry is not reported on stderr\n'; cat "$WORK/stderr"; failures=$((failures + 1))
+fi
+FAKE_NET_PR=99 check "network errors on every try stop as NETWORK, not red" 5 "STOP: NETWORK: gh pr view 12" "green" 12
+expect_calls "^pr view" 5
+if grep -q "^RED" "$WORK/stderr"; then printf 'FAIL a network stop printed RED\n'; failures=$((failures + 1)); fi
+FAKE_NET_PR=99 TEST_NET_TRIES=2 check "PR_CHECKS_NET_TRIES sets the number of tries" 5 "failed 2 times" "green" 12
+expect_calls "^pr view" 2
+FAKE_NET_RULES=99 check "network errors on the rules lookup stop as NETWORK" 5 \
+  "STOP: NETWORK: gh api repos/example/repo/rules/branches/main" "green" 12
+FAKE_NET_RULES=1 check "one network error on the rules lookup is retried" 0 "GREEN" "green" 12
+FAKE_FAIL="pr" check "a non-network gh error is not retried" 4 "HTTP 404" "green" 12
+expect_calls "^pr view" 1
+# gh rewrites a DNS failure to these two lines; the Go text "no such host" shows only with GH_DEBUG.
+FAKE_NET_PR=1 FAKE_NET_MSG='error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com' \
+  check "gh's DNS-failure text is retried" 0 "GREEN" "green" 12
+expect_calls "^pr view" 3
+FAKE_NET_PR=99 FAKE_NET_MSG='error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com' \
+  check "a two-line network error gives a one-line NETWORK stop" 5 "check your internet connection or https://githubstatus.com ; checks not read" "green" 12
 
 if [ "$failures" -ne 0 ]; then
   printf '%s test(s) failed\n' "$failures"

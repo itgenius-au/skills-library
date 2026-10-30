@@ -9,12 +9,12 @@ or auth problem for a code finding.
 Env (all set by glm-exec.sh):
   ZAI_API_KEY      required - the z.ai key (id.secret string), used as a Bearer token
   GLM_URL          required - full chat/completions URL (coding or general endpoint)
-  GLM_MODEL        default glm-5.2
+  GLM_MODEL        the model id (glm-exec.sh always sets it; the fallback below matches its default)
   GLM_MAX_TOKENS   default 2048
   GLM_TEMPERATURE  default 0.3
   GLM_RETRIES      default 1   (transient-only retries)
   GLM_RETRY_SLEEP  default 20  (seconds between transient retries)
-  GLM_TIMEOUT      default 600 (per-request seconds; GLM-5.2 reviews can take minutes)
+  GLM_TIMEOUT      default 600 (per-request seconds; reviews can take minutes)
 
 Args:  glm_call.py <prompt_file> [system_file]
 
@@ -61,7 +61,7 @@ def main():
         temperature = float(os.environ.get("GLM_TEMPERATURE", "0.3"))
         retries = int(os.environ.get("GLM_RETRIES", "1"))
         retry_sleep = float(os.environ.get("GLM_RETRY_SLEEP", "20"))
-        # GLM-5.2 reasons heavily - a large review can take minutes. 180s was too short
+        # The default model reasons heavily - a large review can take minutes. 180s was too short
         # (a slow-but-completing call timed out, got mis-classified transient, and retried).
         request_timeout = float(os.environ.get("GLM_TIMEOUT", "600"))
     except ValueError as e:
@@ -142,7 +142,7 @@ def main():
                 if content:
                     if choice.get("finish_reason") == "length":
                         sys.stderr.write("::GLM-TRUNCATED:: response hit max_tokens - the answer may "
-                                         "be cut off. Raise --max-tokens (GLM-5.2 reasons heavily).\n")
+                                         "be cut off. Raise --max-tokens (the default model reasons heavily).\n")
                     print(content)
                     return 0
                 sys.stderr.write("::GLM-EMPTY:: 200 OK but no assistant content. Raw below.\n")

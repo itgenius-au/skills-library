@@ -78,8 +78,8 @@ To stop docs-only merges deploying, add `ignoredFiles` to the trigger, but only 
 
 When a deploy or integration lands through a PR (for example a merge to a `main` that auto-deploys), gate the merge on the check results of the PR's head commit, and merge only that commit. Two scripts bundled with this skill do the gating. `<DEPLOY_SKILL_DIR>` below is this skill's "Base directory for this skill", pasted literally; the scripts need `gh` and `python3`.
 
-- `<DEPLOY_SKILL_DIR>/scripts/pr-checks-green.sh` waits for the PR's checks and prints the head SHA (the only stdout line) only when it is safe to merge that commit. Exit codes: 0 green, 1 red, 2 no checks registered, 3 checks still running at the time limit, 4 usage error, `gh` error, merge conflict or behind.
-- `<DEPLOY_SKILL_DIR>/scripts/gate-merge.sh` runs that gate, updates a behind branch (a merge, never a force-push) and gates again up to 3 times, refuses to merge onto a red base branch, merges only the gated commit with `--match-head-commit`, and confirms the PR state is `MERGED`. It is the one-command form of everything in this section.
+- `<DEPLOY_SKILL_DIR>/scripts/pr-checks-green.sh` waits for the PR's checks and prints the head SHA (the only stdout line) only when it is safe to merge that commit. Exit codes: 0 green, 1 red, 2 no checks registered, 3 checks still running at the time limit, 4 usage error, `gh` error, merge conflict or behind, 5 GitHub could not be reached (a `STOP: NETWORK` line: the checks were not read, so this is not a red check; run it again).
+- `<DEPLOY_SKILL_DIR>/scripts/gate-merge.sh` runs that gate, updates a behind branch (a merge, never a force-push) and gates again up to 3 times, refuses to merge onto a red base branch, merges only the gated commit with `--match-head-commit`, and confirms the PR state is `MERGED`. It is the one-command form of everything in this section. It exits 0 merged, 1 not merged, 4 usage error, and 5 when GitHub could not be reached (a read is retried first; after a network error on the merge call it reads the PR state before it calls the merge refused). Set `GATE_MERGE_EXPECT_HEAD=<full 40-character sha>` when a caller proved one head (for example a check that the merge deploys nothing): a push after that proof then stops the merge instead of merging the new head. When it reads the base branch for the red-base check, it leaves out a failed Dependabot updater run (a crashed dependency update is not CI); every other failure on the base still counts.
 
 What "green" means to the gate: every check on the head commit finished with SUCCESS (SKIPPED, CANCELLED and every other result is red); an optional check that came back NEUTRAL (a bot that declined to run) and is not a required check of the base branch counts as passed, while a required NEUTRAL check stays red; every check the base branch requires is present (a job that waits on another job registers its check late, so a list that looks green too early is possible: the gate sees the same head commit green on two polls in a row); every GitHub Actions run for the head commit is complete; the PR has no merge conflict and is not behind a base that requires up-to-date branches.
 
@@ -239,7 +239,7 @@ Before a production or shared-staging deploy that can overwrite multiple files o
 
 ```bash
 git worktree list --porcelain
-for wt in $(git worktree list --porcelain | awk '/^worktree / {print $2}'); do
+for wt in $(git worktree list --porcelain | awk '/^worktree / {print $(2)}'); do
   echo "== $wt =="
   git -C "$wt" status --short --branch
   git -C "$wt" log --oneline --decorate "$DEFAULT_BRANCH"..HEAD --max-count=12 || true
@@ -286,6 +286,8 @@ Then verify:
 git diff --check
 git status --short
 ```
+
+A raw wip (or placeholder) commit inside the deploy range blocks a MANUAL build-from-working-tree deploy, because it can ship straight into the built artifact. It does NOT block a pipeline that squash-merges the PR to the default branch (for example `gh pr merge --squash`): the squash collapses every branch commit, wip included, into one commit before the image is built, so the wip never reaches the deployed artifact. Check which path applies before treating a wip commit as a blocking finding.
 
 For production build-artifact deploys, record the artifact digest, image tag, package version, or release ID. For production source deploys, commit and push the exact source tree that passed checks:
 
@@ -358,11 +360,11 @@ For production or shared-staging file replacement deploys:
 Example:
 
 ```bash
-local_hash=$(shasum -a 256 "$LOCAL_FILE" | awk '{print $1}')
+local_hash=$(shasum -a 256 "$LOCAL_FILE" | awk '{print $(1)}')
 ssh "$DEPLOY_HOST" "cp '$REMOTE_FILE' '$REMOTE_FILE.bak.$STAMP'"
 ssh "$DEPLOY_HOST" "cat > '$REMOTE_FILE.tmp.$STAMP'" < "$LOCAL_FILE"
 ssh "$DEPLOY_HOST" "mv '$REMOTE_FILE.tmp.$STAMP' '$REMOTE_FILE'"
-remote_hash=$(ssh "$DEPLOY_HOST" "shasum -a 256 '$REMOTE_FILE' | awk '{print \$1}'")
+remote_hash=$(ssh "$DEPLOY_HOST" "shasum -a 256 '$REMOTE_FILE' | awk '{print \$(1)}'")
 [ "$local_hash" = "$remote_hash" ] || { echo "Hash mismatch"; exit 1; }
 ```
 

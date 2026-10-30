@@ -9,9 +9,10 @@
 # What it always does:
 #   - needs GEMINI_API_KEY in the environment (a free Google AI Studio key works). The key stays in
 #     this process; the wrapper never writes it to disk.
-#   - pins the model (default gemini-4-argon). If the DEFAULT pin is refused (not found, no
-#     permission, no quota - e.g. a free key), re-runs once on gemini-3.8-flash, inside the same
-#     --timeout. An explicit --model is never swapped. Prints "::GEMINI-MODEL:: <id>" on stderr: the model that ran.
+#   - pins the model (the MODEL variable below: the ONE place model names live). If the DEFAULT pin
+#     is refused (not found, no permission, no quota - e.g. a free key), re-runs once on
+#     FALLBACK_MODEL, inside the same --timeout. An explicit --model is never swapped. Prints
+#     "::GEMINI-MODEL:: <id>" on stderr: the model that ran.
 #   - --approval-mode default + the bundled read-only --policy (review-policy.toml next to this script)
 #   - -o text and --skip-trust (headless runs in an untrusted dir, e.g. a fresh worktree, misbehave)
 #   - stdin = --stdin-file (review input such as a diff) or /dev/null (never blocks on stdin)
@@ -33,6 +34,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GEMINI_BIN="${GEMINI_BIN:-gemini}"
 POLICY="$SCRIPT_DIR/review-policy.toml"
 
+# The only place model names are set. SKILL.md says "the default model" and "the fallback model".
 MODEL="gemini-4-argon"
 MODEL_DEFAULT=1
 FALLBACK_MODEL="gemini-3.8-flash"

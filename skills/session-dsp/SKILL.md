@@ -130,6 +130,23 @@ squash in worktree mode, that request counts as the approval. Shared-branch mode
 
 ## Step 4: Squash + push (atomic)
 
+**Secret scan first - it blocks the commit.** Before the reset, scan every line the squash
+would commit. `CLAUDE_SKILL_DIR` is this skill's folder:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/scan_secrets.py" --base "$LAST_NONWIP"
+```
+
+- Exit 0: clean, go on.
+- Exit 2: **STOP. Do not reset, commit or push.** Show the user the masked findings (the
+  script never prints the value). Remove the value, and rotate it if it was ever pushed
+  anywhere. For a known false positive, add `secret-scan: allow` to that line. Scan again.
+- Exit 1: the scan could not run. Say so and ask the user before you push. Never read it as clean.
+
+On Windows, use `python` if `python3` opens the Microsoft Store. A value that is code, not a
+literal (`api_key=self.api_key`, `secret = get_secret(name)`), is not reported. A pushed secret
+cannot be taken back, only rotated.
+
 Once approved, run reset + commit + push in a **single bash call**. The wip hook fires after
 every Claude turn: if reset and commit are in separate turns, the hook will re-wrap your
 soft-reset state into a new `wip` between them.

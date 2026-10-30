@@ -6,7 +6,8 @@
 # handshake can't silently eat an hour.
 #
 # What it always does:
-#   - pins the model (default gpt-6-astra) and reasoning effort (default xhigh)
+#   - pins the model (the MODEL variable below: the ONE place a model name lives) and reasoning
+#     effort (default xhigh)
 #   - `< /dev/null` so codex never blocks waiting on stdin ("Codex is hung" #1 cause)
 #   - `--skip-git-repo-check` (no-op inside a git repo; required outside one)
 #   - picks the sandbox by review tier (see --mode)
@@ -41,6 +42,7 @@
 set -uo pipefail
 
 CODEX_BIN="${CODEX_BIN:-codex}"
+# The only place a model name is set. SKILL.md says "the default model".
 MODEL="${CODEX_REVIEW_MODEL:-gpt-6-astra}"
 EFFORT="xhigh"
 MODE="review"

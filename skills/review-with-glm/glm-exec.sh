@@ -5,7 +5,8 @@
 # talks to the HTTP API directly (via glm_call.py, stdlib only). It encodes the invocation
 # rules in ONE place so every caller inherits them:
 #   - needs ZAI_API_KEY in the environment (load it from your own secret manager first)
-#   - pins the model (default glm-5.2) and the endpoint (default the Coding-Plan endpoint)
+#   - pins the model (the MODEL variable below: the ONE place the model name is set) and the
+#     endpoint (default the Coding-Plan endpoint)
 #   - passes the PROMPT via a temp file (diffs get large; dodges ARG_MAX and quoting)
 #   - classifies failures in glm_call.py: 1113 unfunded / auth / transient - each SURFACED,
 #     never mistaken for a code finding and never guessed around.
@@ -40,9 +41,9 @@ is_nonneg_int() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 # python3 is a hard dependency (the HTTP call). Fail early and clearly.
 command -v python3 >/dev/null 2>&1 || die "python3 not found on PATH - required to call GLM. Install python3."
 
-MODEL="glm-5.2"
+MODEL="glm-5.2"   # the only place the model name is set; SKILL.md says "the default model"
 ENDPOINT="coding"
-# GLM-5.2 reasons heavily (100s of tokens before the final answer); too low a cap leaves
+# The default model reasons heavily (100s of tokens before the final answer); too low a cap leaves
 # `content` empty or truncates the review. The default matches the canonical review call
 # (--max-tokens 64000), so a caller that omits the flag does not truncate: 4096 cut off a
 # diff review and 32000 cut off a plan review that completed at 64000.

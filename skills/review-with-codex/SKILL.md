@@ -14,7 +14,7 @@ Every call goes through a **bundled safety wrapper**, `codex-exec.sh`, that ship
 
 It is a thin, host-neutral wrapper around `codex exec` that always:
 
-- **Pins the model** (default `gpt-6-astra`, changeable with `--model` or the `CODEX_REVIEW_MODEL` env var) and the **reasoning effort** (default `xhigh`), so a deep review gets the deep reasoning budget without you remembering a flag.
+- **Pins the model** (the default is the `MODEL` variable at the top of `codex-exec.sh`, the only place a model name lives in this skill; change it with `--model` or the `CODEX_REVIEW_MODEL` env var) and the **reasoning effort** (default `xhigh`), so a deep review gets the deep reasoning budget without you remembering a flag.
 - **Redirects stdin from `/dev/null`** so Codex never blocks waiting on stdin (the most common cause of "Codex is hung").
 - **Passes `--skip-git-repo-check`** (a no-op inside a git repo, required for a non-git path such as a skills folder).
 - **Picks the sandbox by tier** via `--mode` (default `review` = read-only; see the Sandbox decision tree).
@@ -62,7 +62,7 @@ Commit a checkpoint first. In the prompt, tell Codex the files are in its workin
 
 These are the rules the wrapper enforces for you. You get them for free by calling `codex-exec.sh` instead of raw Codex. They are the difference between a clean review and a hung or accidentally destructive one.
 
-- **The model is pinned** (default `gpt-6-astra`) so a stale local config can't silently downgrade the review. If you hit `model not supported when using Codex with a ChatGPT account`, pass `--model gpt-5.6-sol` (a stable fallback) and check OpenAI's current Codex model list for newer flagships.
+- **The model is pinned** (the default model) so a stale local config can't silently downgrade the review. If you hit `model not supported when using Codex with a ChatGPT account`, pass `--model <id>` with an older flagship your plan supports (check OpenAI's current Codex model list).
 - **Reasoning effort is `xhigh`.** The wrapper always sets `model_reasoning_effort="xhigh"` (override with `--effort` only if you have a reason to). Do not drop it for a real review.
 - **Stdin is closed (`< /dev/null`).** The process never hangs waiting for EOF.
 - **`--skip-git-repo-check` is always passed.** No-op in a normal repo; required when `--dir` points outside a checkout.
@@ -366,7 +366,7 @@ Each pass uses the same canonical call with its own prompt and output file.
 
 ### Model selection
 
-The wrapper pins `gpt-6-astra` (OpenAI's frontier Codex model at the time of writing). Change the default for every call with `CODEX_REVIEW_MODEL`, or per call with `--model`. If the frontier model is unavailable on your account, `gpt-5.6-sol` is the stable flagship fallback. Check OpenAI's current model list for newer options, and prefer the strongest model your plan allows for reviews.
+The wrapper pins OpenAI's frontier Codex model at the time of writing; the `MODEL` variable at the top of `codex-exec.sh` is the one place it is named. Change the default for every call with `CODEX_REVIEW_MODEL`, or per call with `--model`. If the frontier model is unavailable on your account, pass an older flagship with `--model`. Check OpenAI's current model list for newer options, and prefer the strongest model your plan allows for reviews.
 
 ### Reasoning effort
 
@@ -428,7 +428,7 @@ Codex sees a curated picture of the session rather than the raw transcript. That
 - **Wedged with no output (`::CODEX-WEDGED::`, rc 124)**: model/auth **handshake hang**. The wrapper already killed it after `--first-output` seconds. Relaunch attached (foreground) so the startup failure is visible; never passively wait on a background run.
 - **Hard timeout (`::CODEX-TIMEOUT::`, rc 124)**: the run exceeded `--timeout`. Scope the review smaller (specific files/dirs) or raise `--timeout`.
 - **`Could not resolve host` / `Operation not permitted` / `Read-only file system` mid-review**: the **sandbox** blocked it, not a code bug. Re-run at `--mode inspect`/`full`/`danger`; see the Sandbox decision tree. Never report a sandbox denial as a finding.
-- **`model not supported when using Codex with a ChatGPT account`**: the pinned model isn't available on the ChatGPT-account auth path. Pass `--model gpt-5.6-sol`.
+- **`model not supported when using Codex with a ChatGPT account`**: the pinned model isn't available on the ChatGPT-account auth path. Pass `--model <id>` with an older flagship your plan supports.
 - **Large codebase**: scope to specific files/directories rather than whole-repo review
 - **Codex disagrees with Claude**: present both perspectives - the disagreement itself is valuable signal
 - **Codex hallucinates file paths**: cross-check all `file:line` references before presenting to the user

@@ -23,7 +23,8 @@ outcome=$(sed -n "${n}p" "$GATE_PLAN")
 case "$outcome" in
   green) echo "GREEN: every check succeeded" >&2; echo "$GATE_SHA"; exit 0 ;;
   behind) echo "STOP:   the base branch requires up-to-date branches: run \`gh pr update-branch\`, then gate again" >&2; exit 4 ;;
-  *) echo "RED: ci-checks FAILURE" >&2; exit 1 ;;
+  network) echo "STOP: NETWORK: gh pr view 42 failed 5 times: dial tcp 192.0.2.1:443: i/o timeout; checks not read" >&2; exit 5 ;;
+  *) echo "RED: ci FAILURE" >&2; exit 1 ;;
 esac
 EOF
 # Stub gh: records calls; `pr view --json mergeStateStatus` prints the next line of $MSS_PLAN
@@ -35,7 +36,18 @@ cat > "$T/gh" <<'EOF'
 echo "gh $*" >> "$CALLS"
 case "$*" in
   *baseRefName*) echo "https://github.com/o/r/pull/42 main" ;;
+  *"commits/main --jq .sha"*)
+    [ -z "${BASE_SHA_NET:-}" ] || { echo "dial tcp 192.0.2.1:443: i/o timeout" >&2; exit 1; }
+    echo "${BASE_SHA:-cccccccccccccccccccccccccccccccccccccccc}" ;;
+  *"actions/runs"*)
+    [ -z "${BASE_WF_NET:-}" ] || { echo "dial tcp 192.0.2.1:443: i/o timeout" >&2; exit 1; }
+    q="" paginate=""
+    while [ "$#" -gt 0 ]; do case "$1" in --jq) q="$2"; shift ;; --paginate) paginate=1 ;; esac; shift; done
+    printf '%s' "${BASE_WF:-"{\"workflow_runs\":[]}"}" | jq -r "$q"
+    [ -z "$paginate" ] || [ -z "${BASE_WF_PAGE2:-}" ] || printf '%s' "$BASE_WF_PAGE2" | jq -r "$q" ;;
+  *update-branch*) [ -z "${UB_NET:-}" ] || { echo "dial tcp 192.0.2.1:443: i/o timeout" >&2; exit 1; } ;;
   *check-runs*)
+    [ -z "${BASE_NET:-}" ] || { echo "error connecting to api.github.com" >&2; exit 1; }
     [ -z "${BASE_LOOKUP_FAIL:-}" ] || exit 1
     q="" paginate=""
     while [ "$#" -gt 0 ]; do
@@ -52,7 +64,9 @@ case "$*" in
     n=$(cat "$T_DIR/mss_n" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$T_DIR/mss_n"
     s=$(sed -n "${n}p" "$MSS_PLAN" 2>/dev/null); echo "${s:-CLEAN}" ;;
   *"pr merge"*) [ -z "${MERGE_FAIL:-}" ] || { echo "${MERGE_ERR:-the base branch policy prohibits the merge}" >&2; exit 1; } ;;
-  *"pr view"*) echo "$GH_STATE" ;;
+  *"pr view"*)
+    [ -z "${STATE_NET:-}" ] || { echo "dial tcp 192.0.2.1:443: i/o timeout" >&2; exit 1; }
+    echo "$GH_STATE" ;;
 esac
 exit 0
 EOF
@@ -64,7 +78,7 @@ run() {  # run <plan lines...>; sets OUT, RC (NO_ADMIN=1 runs without --admin)
   printf '%s\n' "$@" > "$T/plan"
   printf '%s\n' "${MSS:-}" | tr ' ' '\n' > "$T/mss"
   OUT=$(env CALLS="$T/calls" T_DIR="$T" GATE_PLAN="$T/plan" GATE_SHA="$SHA" GH_STATE="${GH_STATE:-MERGED}" \
-        MSS_PLAN="$T/mss" GATE_MERGE_POLL_S=0 \
+        MSS_PLAN="$T/mss" GATE_MERGE_POLL_S=0 GATE_MERGE_NET_SLEEP=0 \
         GATE_MERGE_GATE="$T/gate" GATE_MERGE_GH="$T/gh" bash "$SCRIPT" 42 --repo o/r ${admin:+"$admin"} ${EXTRA:+"$EXTRA"} 2>&1)
   RC=$?
 }
@@ -77,6 +91,32 @@ if [ "$RC" = 0 ] && calls | grep -q "gh pr merge 42 --repo o/r --squash --match-
 else
   bad "green: rc=$RC calls=$(calls) out=$OUT"
 fi
+
+# A caller that proved one head pins it: a push between the proof and the gate must stop, not
+# merge the new head.
+export GATE_MERGE_EXPECT_HEAD=feedfacefeedfacefeedfacefeedfacefeedface
+run green
+if [ "$RC" = 1 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "head moved after the proof"; then
+  ok "expected head differs: stops, no merge"
+else
+  bad "expected head differs: rc=$RC calls=$(calls) out=$OUT"
+fi
+export GATE_MERGE_EXPECT_HEAD="$SHA"
+run green
+if [ "$RC" = 0 ] && calls | grep -q "gh pr merge 42 --repo o/r --squash --match-head-commit $SHA"; then
+  ok "expected head matches: merges"
+else
+  bad "expected head matches: rc=$RC calls=$(calls) out=$OUT"
+fi
+# A short or upper-case SHA can never equal the gate's full head: refuse it before any gate run.
+export GATE_MERGE_EXPECT_HEAD=1234567
+run green
+if [ "$RC" = 4 ] && ! calls | grep -q "^gate " && printf '%s' "$OUT" | grep -q "full 40-character"; then
+  ok "short expected head: usage stop before the gate"
+else
+  bad "short expected head: rc=$RC calls=$(calls) out=$OUT"
+fi
+unset GATE_MERGE_EXPECT_HEAD
 
 run behind green
 if [ "$RC" = 0 ] && calls | grep -q "gh pr update-branch 42 --repo o/r" \
@@ -139,31 +179,31 @@ runs() {  # runs <name>=<conclusion>...: a check-runs page; "null" = still runni
   done
   printf '{"check_runs":[%s]}' "$out"
 }
-RED_MAIN=$(runs lint=success ci-checks=failure)
+RED_MAIN=$(runs lint=success ci=failure)
 
 BASE_RUNS="$RED_MAIN" run green
 if [ "$RC" != 0 ] && ! calls | grep -q "gh pr merge" \
-   && calls | grep -q "repos/o/r/commits/main/check-runs" \
-   && printf '%s' "$OUT" | grep -q "STOP: the base branch main is red (ci-checks)"; then
+   && calls | grep -q "repos/o/r/commits/cccccccccccccccccccccccccccccccccccccccc/check-runs" \
+   && printf '%s' "$OUT" | grep -q "STOP: the base branch main is red (ci)"; then
   ok "red base: no merge, STOP names the failed check"
 else
   bad "red base: rc=$RC calls=$(calls) out=$OUT"
 fi
 
 for c in timed_out startup_failure; do
-  BASE_RUNS=$(runs ci-checks="$c") run green
+  BASE_RUNS=$(runs ci="$c") run green
   if [ "$RC" != 0 ] && ! calls | grep -q "gh pr merge"; then ok "base check $c: red, no merge"
   else bad "base check $c: rc=$RC out=$OUT"; fi
 done
 
 for c in success cancelled null; do
-  BASE_RUNS=$(runs ci-checks="$c") run green
+  BASE_RUNS=$(runs ci="$c") run green
   if [ "$RC" = 0 ] && calls | grep -q "gh pr merge"; then ok "base check $c: not red, merges"
   else bad "base check $c: rc=$RC out=$OUT"; fi
 done
 
-BASE_RUNS=$(runs lint=success) BASE_PAGE2=$(runs ci-checks=failure) run green
-if [ "$RC" != 0 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "red (ci-checks)"; then
+BASE_RUNS=$(runs lint=success) BASE_PAGE2=$(runs ci=failure) run green
+if [ "$RC" != 0 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "red (ci)"; then
   ok "failed check on page 2: red, no merge"
 else
   bad "page 2: rc=$RC calls=$(calls) out=$OUT"
@@ -185,7 +225,7 @@ suites() {  # suites <app>=<conclusion>...; "null" = not run
 }
 
 BASE_SUITES=$(suites "Travis CI=null" "GitHub Actions=startup_failure") run green
-if [ "$RC" != 0 ] && ! calls | grep -q "gh pr merge" && calls | grep -q "repos/o/r/commits/main/check-suites" \
+if [ "$RC" != 0 ] && ! calls | grep -q "gh pr merge" && calls | grep -q "repos/o/r/commits/cccccccccccccccccccccccccccccccccccccccc/check-suites" \
    && printf '%s' "$OUT" | grep -q "red (GitHub Actions)"; then
   ok "failed check suite with no check run: red, no merge"
 else
@@ -271,6 +311,7 @@ case "$*" in
   *"--json state"*) echo MERGED ;;
   *"--json url,baseRefName"*) echo "https://github.com/o/r/pull/42 main" ;;
   *"--json url,headRefOid"*)
+    [ -z "${NC_NET:-}" ] || { echo 'Post "https://api.github.com/graphql": dial tcp 192.0.2.1:443: i/o timeout' >&2; exit 1; }
     printf '{"url":"https://github.com/o/r/pull/42","headRefOid":"%s","baseRefName":"main","mergeStateStatus":"CLEAN","statusCheckRollup":[]}\n' "$GATE_SHA" ;;
   *check-runs*) echo ;;
   *check-suites*) echo ;;
@@ -284,7 +325,7 @@ chmod +x "$T/gh_nc"
 nc_run() {  # nc_run [wait seconds]; sets OUT, RC; real gate, 2 second limit
   rm -f "$T/calls"
   OUT=$(env CALLS="$T/calls" GATE_SHA="$SHA" GATE_MERGE_GH="$T/gh_nc" PR_CHECKS_GH="$T/gh_nc" \
-        PR_CHECKS_INTERVAL=0.2 PR_CHECKS_NONE_SETTLE=0 PR_CHECKS_WAIT_S="${1:-2}" \
+        PR_CHECKS_INTERVAL=0.2 PR_CHECKS_NONE_SETTLE=0 PR_CHECKS_WAIT_S="${1:-2}" PR_CHECKS_NET_SLEEP=0 \
         bash "$SCRIPT" 42 --repo o/r 2>&1)
   RC=$?
 }
@@ -318,6 +359,124 @@ if [ "$RC" != 0 ] && printf '%s' "$OUT" | grep -q "STOP"; then ok "merge not con
 
 OUT=$(env GATE_MERGE_GATE="$T/gate" GATE_MERGE_GH="$T/gh" bash "$SCRIPT" 2>&1); RC=$?
 if [ "$RC" = 4 ]; then ok "no PR argument: usage, exit 4"; else bad "usage rc=$RC"; fi
+
+# Network errors: exit 5, never "checks are not green", never a blind merge.
+run network
+if [ "$RC" = 5 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "^STOP: NETWORK" \
+   && ! printf '%s' "$OUT" | grep -q "checks are not green"; then
+  ok "gate network stop: exit 5, NETWORK, no merge"
+else
+  bad "gate network stop: rc=$RC calls=$(calls) out=$OUT"
+fi
+MERGE_FAIL=1 MERGE_ERR="dial tcp 192.0.2.1:443: i/o timeout" GH_STATE=MERGED run green
+if [ "$RC" = 0 ] && printf '%s' "$OUT" | grep -q "^MERGED 42" \
+   && [ "$(calls | grep -c "gh pr merge")" = 1 ] \
+   && calls | grep -q "gh pr merge 42 --repo o/r --squash --match-head-commit $SHA"; then
+  ok "merge call network error, PR is MERGED: reports MERGED"
+else
+  bad "merge network, merged: rc=$RC out=$OUT"
+fi
+MERGE_FAIL=1 MERGE_ERR="dial tcp 192.0.2.1:443: i/o timeout" GH_STATE=MERGED EXTRA=--delete-branch run green
+if [ "$RC" = 0 ] && printf '%s' "$OUT" | grep -q "check that the head branch was deleted"; then
+  ok "merged after a network error with --delete-branch: warns to check the branch"
+else
+  bad "merge network, delete-branch: rc=$RC out=$OUT"
+fi
+unset EXTRA
+MERGE_FAIL=1 MERGE_ERR="dial tcp 192.0.2.1:443: i/o timeout" GH_STATE=OPEN run green
+if [ "$RC" = 5 ] && printf '%s' "$OUT" | grep -q "the PR is 'OPEN', not merged"; then
+  ok "merge call network error, PR still OPEN: exit 5"
+else
+  bad "merge network, open: rc=$RC out=$OUT"
+fi
+MERGE_FAIL=1 MERGE_ERR="the base branch policy prohibits the merge" GH_STATE=OPEN run green
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q "gh pr merge refused"; then
+  ok "a policy refusal is not treated as a network error"
+else
+  bad "policy refusal: rc=$RC out=$OUT"
+fi
+STATE_NET=1 run green
+if [ "$RC" = 5 ] && printf '%s' "$OUT" | grep -q "state could not be read" \
+   && [ "$(calls | grep -c -- '--json state')" = 5 ]; then
+  ok "MERGED read-back network error: 5 tries, then exit 5"
+else
+  bad "state network: rc=$RC calls=$(calls) out=$OUT"
+fi
+unset STATE_NET MERGE_FAIL MERGE_ERR
+BASE_NET=1 run green
+if [ "$RC" = 5 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "reading the checks of the base branch"; then
+  ok "base-branch checks unreadable on the network: exit 5, no merge (never skips the red-base check)"
+else
+  bad "base network: rc=$RC calls=$(calls) out=$OUT"
+fi
+unset BASE_NET
+UB_NET=1 run behind green
+if [ "$RC" = 5 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "update-branch hit a network error" \
+   && [ "$(calls | grep -c "update-branch")" = 1 ]; then
+  ok "update-branch network error: exit 5, not retried, no merge"
+else
+  bad "update-branch network: rc=$RC calls=$(calls) out=$OUT"
+fi
+unset UB_NET
+NC_NET=1 nc_run
+if [ "$RC" = 5 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "STOP: NETWORK: gh pr view 42" \
+   && printf '%s' "$OUT" | grep -q "^STOP: NETWORK: GitHub could not be reached while gating"; then
+  ok "end to end: the real gate's NETWORK stop reaches gate-merge as exit 5"
+else
+  bad "end to end network: rc=$RC calls=$(calls) out=$OUT"
+fi
+unset NC_NET
+
+
+# A crashed Dependabot updater run on the base commit is not CI (a failed dependency update can make
+# main read red as "Dependabot, GitHub Actions" while ci is green).
+DEP_WF='{"workflow_runs":[{"name":"pip in /app for examplepkg - Update #1","event":"dynamic","path":"dynamic/dependabot/dependabot-updates","check_suite_id":111}]}'
+DEP_RUN='{"name":"Dependabot","conclusion":"failure","check_suite":{"id":111}}'
+DEP_SUITE='{"id":111,"conclusion":"failure","app":{"name":"GitHub Actions"}}'
+CI_RUN='{"name":"ci","conclusion":"failure","check_suite":{"id":222}}'
+CI_SUITE='{"id":222,"conclusion":"failure","app":{"name":"GitHub Actions"}}'
+BASE_WF="$DEP_WF" BASE_RUNS="{\"check_runs\":[$DEP_RUN]}" BASE_SUITES="{\"check_suites\":[$DEP_SUITE]}" run green
+if [ "$RC" = 0 ] && calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "ignored 1 Dependabot updater run"; then
+  ok "a failed Dependabot updater run only: not a red base, merges, says so"
+else
+  bad "dependabot only: rc=$RC calls=$(calls) out=$OUT"
+fi
+BASE_WF="$DEP_WF" BASE_RUNS="{\"check_runs\":[$DEP_RUN,$CI_RUN]}" BASE_SUITES="{\"check_suites\":[$DEP_SUITE,$CI_SUITE]}" run green
+if [ "$RC" = 1 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "is red (GitHub Actions, ci)"; then
+  ok "Dependabot updater plus a real CI failure: still red, names only the CI check"
+else
+  bad "dependabot plus CI: rc=$RC calls=$(calls) out=$OUT"
+fi
+OTHER_WF='{"workflow_runs":[{"name":"Dependabot","event":"push","path":".github/workflows/dependabot.yml","check_suite_id":111}]}'
+BASE_WF="$OTHER_WF" BASE_RUNS="{\"check_runs\":[$DEP_RUN]}" BASE_SUITES="{\"check_suites\":[$DEP_SUITE]}" run green
+if [ "$RC" = 1 ] && ! calls | grep -q "gh pr merge"; then
+  ok "a repo workflow named Dependabot is CI: a failure stays red"
+else
+  bad "workflow named Dependabot: rc=$RC calls=$(calls) out=$OUT"
+fi
+BASE_WF_NET=1 BASE_WF="$DEP_WF" run green
+if [ "$RC" = 5 ] && ! calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "^STOP: NETWORK"; then
+  ok "base Actions runs unreadable on the network: exit 5, no merge"
+else
+  bad "runs network: rc=$RC calls=$(calls) out=$OUT"
+fi
+unset BASE_WF_NET
+PAGE1_WF='{"workflow_runs":[{"name":"CI","event":"push","path":".github/workflows/ci.yml","check_suite_id":333}]}'
+BASE_WF="$PAGE1_WF" BASE_WF_PAGE2="$DEP_WF" BASE_RUNS="{\"check_runs\":[$DEP_RUN]}" BASE_SUITES="{\"check_suites\":[$DEP_SUITE]}" run green
+if [ "$RC" = 0 ] && calls | grep -q "gh pr merge" && printf '%s' "$OUT" | grep -q "ignored 1 Dependabot updater run"; then
+  ok "a Dependabot updater run on page 2 of the Actions runs is still left out"
+else
+  bad "page 2 updater: rc=$RC calls=$(calls) out=$OUT"
+fi
+BASE_SHA=dddddddddddddddddddddddddddddddddddddddd run green
+if calls | grep -q "commits/dddddddddddddddddddddddddddddddddddddddd/check-runs" \
+   && calls | grep -q "commits/dddddddddddddddddddddddddddddddddddddddd/check-suites" \
+   && calls | grep -q "actions/runs?head_sha=dddddddddddddddddddddddddddddddddddddddd"; then
+  ok "the base checks and runs are read for one commit (the base SHA)"
+else
+  bad "base sha: calls=$(calls)"
+fi
+unset BASE_SHA
 
 echo ""
 if [ "$FAILS" = 0 ]; then echo "gate-merge: PASS"; exit 0; fi
