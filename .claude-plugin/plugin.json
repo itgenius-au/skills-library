@@ -1,6 +1,6 @@
 {
   "name": "skills-library",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "itGenius's public Claude Code skills: the full dev process (dev-brainstorming, dev-writing-plans, dev-quick-build, dev-auto-build, dev-qa-verify, dev-debugging, dev-deploy-safely), multi-model review (review-swarm over Codex, Gemini, GLM, and an isolated Claude pass; plus review-debate), session and repo hygiene, VM operations, executive summaries, checked PDFs, AI-copy humanizing, and a daily morning-brief HUD.",
   "author": {
     "name": "itGenius",

@@ -433,5 +433,18 @@ def test_check_finds_a_raw_value_in_a_file_name(tmp_path):
     (legs / "fake person notes.md").write_text("clean text\n", encoding="utf-8")
     result = run(str(src), "--check", str(legs), "--extra", "Fake Person")
     assert result.returncode == 1
-    assert "HIT" in result.stdout
+    assert "HIT" in result.stdout and "[extra-1]" in result.stdout
+    assert "fake person" not in (result.stdout + result.stderr).lower()  # the HIT line names it by placeholder
+
+
+def test_check_masks_a_value_glued_to_other_characters_in_a_file_name(tmp_path):
+    # The NIE pattern has word boundaries, so it would not mask this name; the literal needle must.
+    doc = write_doc(tmp_path, f"owner {NIE}\n")
+    legs = tmp_path / "legs"
+    legs.mkdir()
+    (legs / f"report{NIE}.md").write_text("looks fine\n", encoding="utf-8")
+    result = run(str(doc), "--check", str(legs))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "report[NIE].md" in result.stdout and "hits=1" in result.stdout, result.stdout
+    assert NIE not in result.stdout and NIE not in result.stderr
 

@@ -3,6 +3,10 @@
 This project uses semantic versions. A new or renamed skill is a minor bump. A fix or a docs
 change is a patch.
 
+## 1.3.1 - 2026-10-30
+
+- Fixed `redact_doc.py --check`: it no longer prints a sensitive value found in a file name.
+
 ## 1.3.0 - 2026-10-30
 
 - Added two skills for VM operators: `claude-vm-ops` and `session-recovery`.

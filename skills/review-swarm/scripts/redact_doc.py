@@ -16,8 +16,8 @@ usage: redact_doc.py <file> --out <dir> [--patterns <file>] [--extra <literal> .
   --extra     one or more literals to redact as well (a name, a registry code), case-insensitive,
               written as [extra-<n>]. Repeat the flag or list several after it; put <file> first.
   --check     after the panel: search every file under <dir> (or one file) for the raw values the
-              patterns and extras find in the ORIGINAL, case-insensitively. Prints the file and the
-              placeholder of each hit, never the value.
+              patterns and extras find in the ORIGINAL, case-insensitively. Prints the file (a value in
+              its name is shown as the placeholder) and the placeholder of each hit, never the value.
 
 Redact mode prints, per placeholder, the count in the original and in the copy. Any count above 0
 in the copy is a survivor: the copy is removed and the run exits 1.
@@ -119,6 +119,10 @@ def check(original: str, target: Path, rules) -> None:
     if not target.exists():
         fail(f"--check {target} does not exist")
     needles = [(re.compile(re.escape(value), re.IGNORECASE), label) for value, label in values.items()]
+    # A file name is shown with the same literal needles that found the hit. The format patterns have word
+    # boundaries and would leave a value that sits next to other characters (`reportX0000000T.md`) on screen.
+    labels = {value.lower(): label for value, label in values.items()}
+    mask = re.compile("|".join(re.escape(v) for v in sorted(values, key=len, reverse=True)), re.IGNORECASE) if values else None
     control = sum(1 for regex, _ in needles if regex.search(original))
     print(f"control: values={len(values)} found_in_original={control}")
     if not values:
@@ -131,7 +135,8 @@ def check(original: str, target: Path, rules) -> None:
             found = len(regex.findall(text)) + len(regex.findall(path.name))
             if found:
                 hits += found
-                print(f"HIT {path}: {label} x{found}")
+                name = mask.sub(lambda m: labels.get(m.group(0).lower(), "[value]"), path.name) if mask else path.name
+                print(f"HIT {path.parent / name}: {label} x{found}")
     print(f"checked files={len(files)} hits={hits}")
     sys.exit(1 if hits else 0)
 
