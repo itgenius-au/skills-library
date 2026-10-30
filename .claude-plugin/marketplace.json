@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Public Claude Code skills from itGenius: the full house dev process (brainstorm, plan, build, verify, deploy, wrap), multi-model review, session and repo hygiene, executive summaries, checked PDFs, copy humanizing, and a daily morning brief.",
-    "version": "1.2.0"
+    "version": "1.2.1"
   },
   "plugins": [
     {

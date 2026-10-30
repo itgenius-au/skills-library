@@ -75,6 +75,12 @@ Keep the repo, the machine, and the session clean.
 | `document-pdf` | Make a checked PDF from one Markdown source (reports, letters, agreements, evidence bundles), with a verify gate before you send anything. |
 | `morning-brief` | Build a daily brief HUD from your own sources. |
 
+### Guides
+
+| Guide | What it covers |
+|---|---|
+| [Claude Code on a VM](./docs/claude-code-vm-setup-spec.md) | Run Claude Code on an always-on Linux VM and drive it from your phone. A full setup spec: sizing, systemd units, sign-in, updates, multiple accounts, security, and troubleshooting. Not tied to one cloud provider. |
+
 ### Renamed skills
 
 Version 1.2.0 renamed several skills to match the names we use in-house. The old
