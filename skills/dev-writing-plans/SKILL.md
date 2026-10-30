@@ -82,6 +82,7 @@ For each task:
 1. **Checkpoint tasks** after every 3-5 tasks or at a milestone - an explicit task that pauses and verifies everything still works together.
 2. **Risk flags** (`**Risk**:` field) on any task that touches shared infrastructure, changes a schema or an API contract, or affects other projects - what could go wrong and how to mitigate it.
 3. **Rollback notes** for destructive or hard-to-reverse tasks.
+4. **Payoff and code budget** when the spec exists to cut cost (money, tokens or spend): the expected saving, the measure that proves it (what runs, on what, and the pass mark), and a code budget counted as the lines the branch adds to code and test files (`git diff --numstat origin/<default>...HEAD`, docs not counted). Put the measure before any further build round. Add a checkpoint after each measure and at each phase end, written as `**STOP on a miss**: over budget or below the pass mark = escalate; do not start the next task until the user gives a go and a new budget`. `dev-auto-build` treats that miss as an escalation. A cost-saving build whose code costs more than it saves is a net loss; see `dev-quick-build`'s scope gate.
 
 ### Step 5: Write the plan document
 

@@ -86,6 +86,12 @@ Verification MAY create and exercise real write paths, including test / smoke da
 - **Emits nothing external:** no email / SMS / DM / chat to real people, no money movement, no publish to a public surface. These stay human-gated regardless of reversibility.
 - **Audited:** log every created artifact and its cleanup in the runbook, and every toggled field with its prior value and confirmed revert. A failed cleanup or revert is a blocking finding, never silent residue.
 
+**A guarded refusal click (a separate case, not one of the conditions above).** A pass may click a control on production (for example, a destructive control) only to prove a NEW refusal path that the serving revision carries. The "Emits nothing external" condition above still wins: never do this on a control that would move money, message a real person, or delete data if the guard were wrong. A stored-state read proves state, not code order, so first confirm in the deployed code that the refusal check runs before the external call.
+
+- **Before the click, all must hold:** a read-only guard, run immediately before, shows the state that makes the backend refuse (for example, a read of the stored state that makes the backend refuse), with a positive control that the read found the record; you can read the logs; exactly one request will be let through, with no retry. If the guard reads unsafe or fails, do not click.
+- **After the click, all must hold:** the captured response is the expected refusal; the guard reads the same as before; the logs show the refusal event and no action event.
+- **Anything else** (a different response, a changed guard, unreadable logs) counts as an action that landed: stop, record a blocking finding, tell the owner, do not retry, and remediate only as the owner directs.
+
 ## Rule out a broken check first
 
 Before treating a browser/QA failure as a product defect, confirm the check itself is sound:

@@ -19,36 +19,19 @@ Runs **four models** over the same subject and returns **one** consolidated find
 
 > **This is the multi-model review gate** that `dev-quick-build` and `dev-auto-build` call for their review phase, rather than hand-rolling the fan-out. If your project has no such build workflow, invoke this skill directly whenever a change, plan, or decision needs a high-confidence panel before you act on it.
 
-## How it differs from `review-debate` (pick the right one)
+## Reference files (read the file when its row applies)
 
-| | `review-swarm` (this) | `review-debate` |
-|---|---|---|
-| Reviewers | Codex + Gemini + GLM + **Fable** (4) | **Primary agent** + Gemini + Codex |
-| Rounds | **One** (review -> synthesize) | **Three** (review -> challenge -> synthesize) |
-| Primary agent | Orchestrator only | A reviewer + moderator |
-| Speed / cost | Faster, ~4 parallel calls | Deeper, up to ~4 calls + debate |
-| Use when | Fast high-confidence panel over a subject | The finding is disputed and needs models to argue it out |
+This file holds the modes, the shared reviewer prompt, the rules every leg obeys, the post-panel check, the must-fix rule and quick mode. The two dispatch paths, the redaction rules and the edge cases live in `references/` beside it. Open a file when its row applies, and open it BEFORE the step it names: a row is an instruction, not a link to skim. Text past the first screens of this file is not kept after a compaction: after one, re-read Step 5 (the must-fix rule), the post-panel check and Quick mode in this file before you adopt findings.
 
-Reach for `review-debate` when a `review-swarm` surfaces a genuine disagreement worth litigating. Reach for a single `review-with-codex` / `review-with-gemini` / `review-with-glm` / `review-with-claude` for a quick one-model sanity check.
-
-## When to use
-
-- **Pre-merge / pre-ship code review** of a feature diff or branch.
-- **A decision** with real downside (architecture, trust model, money, legal/tax).
-- **A plan** before building against it.
-- **A document** you are about to act on (contract, filing, tax position, runbook).
-- The **review gate** inside `dev-quick-build` (plan review) and `dev-auto-build` (diff review).
-
-**When NOT to use**: a small/obvious change, a style pass, or anything where one model is plenty - use a single `review-with-*` skill. Speed-critical work where one opinion suffices.
-
-## Prerequisites (each model's own skill owns the details)
-
-- `review-with-codex` - Codex CLI signed into the reviewer's own ChatGPT account (`codex login`). The login is per OS user: on a shared machine each user needs their own, or every Codex leg fails with HTTP 401.
-- `review-with-gemini` - Gemini CLI + a `GEMINI_API_KEY` in the environment.
-- `review-with-glm` - a z.ai key (`ZAI_API_KEY`) in the environment + a funded GLM Coding Plan.
-- `review-with-claude` - the machine's own Claude Code login (no key). Fable runs via headless `claude -p`; you choose its model in `~/.claude/review-with-claude.config.json`.
-
-Keys come from your own environment or secret manager. **Never** use someone else's key. Model pins live in the four sibling skills - do NOT restate versions here (they rot); match whatever those skills pin.
+| When | Read now |
+|---|---|
+| Step 3, the pre-dispatch check says UNBOUND, so you dispatch subagent legs | `references/subagent-legs.md`, before you dispatch the first leg |
+| Step 3, the pre-dispatch check says BOUND, a subagent leg locked on its snapshot, or a leg's subagent dispatch failed outright | `references/orchestrator-run-legs.md`, before you launch the first leg |
+| Step 3, any reachable branch history holds a live credential, or the subject touches customer data, bank details or a personal document | `references/redaction-and-privacy.md`, before you build any snapshot or packet |
+| Step 3, before you write any leg prompt (the host-hook line every leg gets, Gemini's `::GEMINI-MODEL::` marker); before a quick-mode decision or doc review (the Codex `TIME LIMIT` line, `--timeout 1800` for a long document); or a leg returned early or empty, timed out, printed a partial GLM report, failed to authenticate, or the host is small | `references/leg-troubleshooting.md` |
+| Step 4 or 5: a GLM report claims command output, a finding rests on vendor documentation, a test-leak finding appears, or you write the report | `references/synthesis.md` |
+| Quick mode with a large packet, a Codex leg on a large repo, or a session that cannot run background calls | `references/quick-mode-details.md`, before you launch the legs |
+| You are unsure whether to run the swarm at all or whether `review-debate` fits better, it is the first use on this machine, a key-based leg fails to authenticate, you need the model-pins note, or you want example invocations | `references/setup-and-examples.md` |
 
 ## The verification preamble (prepended to every model's prompt)
 
@@ -151,7 +134,7 @@ Some agent harnesses refuse a Bash command that contains a `$(...)`/backtick sub
 1. Write the prompt with your editor/Write tool to a file in a scratch directory. Do not build the prompt in the shell.
 2. Run the wrapper as ONE plain command, every path a literal absolute path (never a shell variable), for example:
    `<REVIEW_SKILLS>/review-with-codex/codex-exec.sh --mode review --dir <PROJECT_DIR> --prompt-file <SCRATCH>/codex-prompt.txt > <SCRATCH>/codex-out.txt 2>&1`
-3. Read `<SCRATCH>/codex-out.txt`.
+3. Read `<SCRATCH>/codex-out.txt`. A Codex output can pass 256 KB (it logs every command it ran), and some file readers refuse a file that size. Then `grep -n '^MODEL:'` to find the final report and read from that line with `sed -n '<line>,$p'`.
 
 Placeholders used throughout this skill: `<REVIEW_SKILLS>` = the parent of this skill's "Base directory for this skill" path (the folder holding the sibling `review-with-*` skills), pasted literally (never a shell variable). Each wrapper lives in its own sibling skill: `<REVIEW_SKILLS>/review-with-codex/codex-exec.sh`, `<REVIEW_SKILLS>/review-with-gemini/gemini-exec.sh`, `<REVIEW_SKILLS>/review-with-glm/glm-exec.sh`, `<REVIEW_SKILLS>/review-with-claude/fable-exec.sh`. `<SCRATCH>` = your scratch directory, pasted literally; `<PROJECT_DIR>` / `<snapshot>` = the absolute path of the repo or review snapshot under review; `<RANGE>` = the diff range.
 
@@ -171,33 +154,13 @@ git rev-parse --git-dir
 git rev-parse --git-common-dir
 ```
 
-Run them as two separate plain commands. Different outputs mean BOUND; the same output means UNBOUND. Also treat the session as BOUND when the harness says it "is isolated in the worktree" (it entered one via its worktree-entering tool, such as Claude Code's `EnterWorktree`). When BOUND, **do NOT dispatch subagent legs.** A subagent inherits the pinned cwd, so it either locks (see "If a leg cannot bind to its snapshot" below) or silently reads the build worktree instead of its snapshot. Go straight to the orchestrator-run path in that section: one background Bash call per leg, each at its own snapshot by absolute path. When UNBOUND, dispatch subagents as below.
+Run them as two separate plain commands (a combined `[ "$(...)" != "$(...)" ]` test is itself refused in a bound session). Different outputs mean BOUND; the same output means UNBOUND. Also treat the session as BOUND when the harness says it "is isolated in the worktree" (it entered one via its worktree-entering tool, such as Claude Code's `EnterWorktree`). When BOUND, **do NOT dispatch subagent legs.** A subagent inherits the pinned cwd, so it either locks (see "If a leg cannot bind to its snapshot" below) or silently reads the build worktree instead of its snapshot. Go straight to the orchestrator-run path: one background Bash call per leg, each at its own snapshot by absolute path. Key this on the detected binding state, not on the surface name. When UNBOUND, dispatch subagents.
 
-Dispatch **four general-purpose subagents in the same turn** (one message, four Agent calls, each `run_in_background: true`) - label them `codex` / `gemini` / `glm` / `fable`. These are ROLE labels, not subagent-type names; all four are general-purpose agents. Background dispatch is what makes them parallel and non-blocking: a slow or wedged leg does NOT hold up the others or the turn - you are notified as each returns.
+**Two paths, chosen by the check above.** UNBOUND: dispatch subagent legs, and read `references/subagent-legs.md` now, before you dispatch the first leg. BOUND: run the legs from the orchestrator, and read `references/orchestrator-run-legs.md` now, before you launch the first leg. Both paths share every rule below: the model report, the freeze, the leg-prompt rules, the snapshots, the post-panel check and the redaction rules. Before you write any leg prompt, read `references/leg-troubleshooting.md` now: it holds the host-hook line that goes into every leg prompt and Gemini's `::GEMINI-MODEL::` marker, which you record instead of the leg's own `MODEL:` line.
 
-Each subagent's only job is to **run its model via the matching review skill and return that model's findings verbatim**. It must NOT add its own analysis, and it must NOT run the sibling skill's "add your own assessment / My Take" step - that would leak a fifth (Claude-orchestrator) opinion into the panel.
+**Every leg reports the exact model it ran.** At the top of its returned report the subagent states the precise model ID its CLI used this run - the pin (or default) the sibling skill applied, read back from the run, e.g. `MODEL: <exact model id>` (the Fable leg adds its effort, for example `MODEL: <exact model id> (effort: high)`, so the synthesis shows whether the gate tripped). Do NOT hardcode versions in this skill (they rot, see the model-pins note in `references/setup-and-examples.md`); the synthesis names whatever each leg reports. If a leg cannot read its model back, it reports `MODEL: unknown`. The GLM leg cannot read its model back, and its self-reported id is unreliable (it can name itself as a different model than the wrapper pinned). Record the wrapper's pin for GLM, not the model's own claim.
 
-**A leg must BLOCK on its CLI and return real findings, never background-and-return.** The single biggest wall-clock waste in this loop is a leg subagent that launches its review CLI as a background task and then yields to the orchestrator before any output exists, forcing manual re-nudges. A subagent that returns before its CLI produced findings is a FAILED leg, not a clean one: the orchestrator re-runs it synchronously (or marks it `unavailable`), and NEVER records an empty early-return as "no findings". Tell each leg, in its prompt, to run its CLI to completion and return the findings text (or a definite failure), not to background it. Name the mechanism, because "block" alone is not enough: the leg runs its wrapper as ONE foreground Bash call with a long timeout (up to the 600000 ms maximum), and never uses `run_in_background`, `Monitor`, or a "wait for the notification" step. Some legs told to "block" still arm a monitor and return early.
-
-**Detect a background-and-return by its tell** - an empty or near-instant reply, no `MODEL:` line, or language like "started"/"running in the background" instead of findings. Recover by nudging that SAME leg in place (send a message to the codex/gemini/glm/fable agent: "you returned before your CLI finished - block on it now and return the findings"), not by accepting the early return or launching a redundant duplicate leg. Only mark it `unavailable` if the nudge itself times out.
-
-**A leg force-backgrounded by the Bash tool's own cap is NOT a background-and-return.** The Bash tool stops one foreground call at 600000 ms (10 minutes), but the Fable wrapper allows up to 720 s at `high` (1500 s at `xhigh`) and the GLM wrapper up to 900 s, so a leg that correctly ran its CLI in the foreground can pass the cap, and the harness then moves the call to the background itself. That leg says so plainly (for example "exceeded the 10-minute cap; waiting for the completion notification") and has no `MODEL:` line yet. Do not nudge it and do not mark it `unavailable`: it cannot block past a ceiling it does not control. Wait for its completion notification like any other in-flight leg. Nudge only when the leg's own words show it chose to background itself (armed a Monitor, or said "started" with time still on the clock). In quick mode, the "Quick mode" rules replace this wait.
-
-**Every leg reports the exact model it ran.** At the top of its returned report the subagent states the precise model ID its CLI used this run - the pin (or default) the sibling skill applied, read back from the run, e.g. `MODEL: gpt-6-astra` or `MODEL: <fable-model-id> (effort: high)` (the Fable leg adds its effort so the synthesis shows whether the gate tripped). Do NOT hardcode versions in this skill (they rot, see the model-pins note above); the synthesis names whatever each leg reports. If a leg cannot read its model back, it reports `MODEL: unknown`. The GLM leg cannot read its model back, and its self-reported id is unreliable (it can name itself as a different model than the wrapper pinned). Record the wrapper's pin for GLM, not the model's own claim. A GLM leg can also return its raw reasoning (a think-aloud with draft finding lists and self-questions) instead of the report. That is a PARTIAL leg: read its planned findings by hand, verify each one, and record the leg as partial in the synthesis. Never count it as a clean pass. The tell is `::GLM-TRUNCATED::` as the first line of the output: the reply hit the wrapper's default `--max-tokens` while still reasoning. Read out the findings it had concluded, verify each, and mark the leg PARTIAL; `review-with-glm` has the larger-cap re-run.
-
-**Every leg also reports the directory its CLI actually read.** Next to `MODEL:`, the leg states `DIR: <absolute path>`, the directory its CLI ran in (for Gemini, the `--dir` path). Compare it with the snapshot you assigned. A mismatch is a **silent bind failure**: the leg did not lock, but it reviewed the wrong tree. Its findings are valid only if that tree was at the same commit. Flag every mismatch in the synthesis header, check that the tree the leg read was at the checkpoint commit, and run the post-panel check on the build worktree with extra care (that leg had write access to it).
-
-**Mode mapping when dispatching** (the sibling skills implement `code`/`decision`/`plan`/`build`/`codebase`, there is NO `doc` mode): `doc` -> the sibling's `decision` path with the document inlined; `plan` -> `plan`; `code`/`build` -> `code`/`build` **at the exact diff range from Step 1**. Pass that range explicitly in each leg's prompt - do NOT let a leg fall back to the sibling's default `main...HEAD`, or unrelated in-flight work pollutes the "isolated" review.
-
-- Subagent **codex** -> "Invoke `review-with-codex` on `<subject>` at `<explicit mode + range>`. You are one leg of a review swarm (Codex+Gemini+GLM+Fable). Run Codex and return ONLY CODEX's findings in the structured format below; do not add your own analysis or run the skill's My-Take step. Run your CLI to completion and BLOCK on it. Do NOT launch it in the background and return before it has produced output - a background-and-return is a FAILED leg. Return the findings text now, or state a definite failure; never yield with nothing. <shared prompt>"
-  If the Codex leg stops because its read-only sandbox cannot run the tests it wants (for example a harness that needs `mktemp`), do NOT widen its sandbox mid-panel. Run the tests yourself, save the output to a file OUTSIDE the repo, and send the SAME leg back for a static review that treats that log as an unverified claim and judges fake-green from the test source. The same holds for mutation testing: a Codex mutation table whose rows read `BLOCKED` (the sandbox could not make copies) is no result. Run the mutations yourself and record KILLED / SURVIVED from that run.
-- Subagent **gemini** -> same, invoking `review-with-gemini`.
-- Subagent **fable** -> same, invoking `review-with-claude` at the effort from Step 2 (add `--effort xhigh` only when the gate tripped). Fable explores the repo itself with Read, Grep and Glob and has no shell, so it behaves like Codex/Gemini - pass it the repo dir, and in code/build mode pass `--diff-range <RANGE>`, not an inlined diff.
-- Subagent **glm** -> same, invoking `review-with-glm`. GLM cannot explore the repo, so THIS subagent runs `git diff <range>` / reads the files/plan/doc ITSELF and inlines them into GLM's prompt.
-
-**Pre-send check for every inlined prompt (GLM especially).** Before sending, search the assembled prompt for phrases that promise content ("included below", "excerpt attached", "see the diff below", "full text follows") and confirm that the promised text is actually there, and not empty or truncated. A reviewer that cannot read the repo does not flag a missing excerpt. It writes findings "consistent with the prompt's descriptions" instead, with plausible but invented file:line citations. If content is missing, fix the prompt and re-send. Treat any finding from a leg whose prompt failed this check as unverified. `scripts/glm_packet.py` (below) automates this check.
-
-Give the CLIs room. Typical times: Codex at `xhigh` about 6-7 minutes (slowest around 14); Fable at `high` about 5-6 minutes, at `xhigh` about 8-9 (slowest around 10 or more). Collect each report as it lands. If a leg has not returned after **~12 minutes**, mark it `unavailable` and synthesize with the rest - never stall the panel on one wedged leg (see Graceful degradation). Exception: give a Fable leg that the Step 2 gate sent to `xhigh` **~26 minutes**, because its own ceiling is 1500 s at that effort. In quick mode, the 10-minute stop in "Quick mode" replaces these waits.
+**Pre-send check for every inlined prompt (GLM especially).** Before sending, search the assembled prompt for phrases that promise content ("included below", "excerpt attached", "see the diff below", "full text follows") and confirm that the promised text is actually there, and not empty or truncated. A reviewer that cannot read the repo does not flag a missing excerpt. It writes findings "consistent with the prompt's descriptions" instead, with plausible but invented file:line citations. If content is missing, fix the prompt and re-send. Treat any finding from a leg whose prompt failed this check as unverified. `scripts/glm_packet.py` (see `references/orchestrator-run-legs.md`) automates this check.
 
 **Freeze the subject while any leg runs.** Do not edit the files under review until every leg has returned. Fold early findings in only after the last leg lands. Also tell each leg, in its prompt: if the tree changes in a way the leg did not cause, REPORT it and never revert it (no `git checkout --`, `git reset`, or `git stash`). A leg cannot tell the orchestrator's edits from its CLI's side effects. Inside a review swarm, the sibling skills' "`git status` and discard unsolicited edits" cleanup (for example `review-with-gemini`) is the orchestrator's job, done once after the last leg lands, not a leg's. A leg in a write-capable sandbox mode can mistake the orchestrator's mid-panel edits for its own CLI's side effects and revert them, and the fixes then have to be re-applied before merge.
 
@@ -209,29 +172,13 @@ Give the CLIs room. Typical times: Codex at `xhigh` about 6-7 minutes (slowest a
 
 **Give the legs a snapshot, never the build worktree.** A prose "READ-ONLY" does not stop an agent that has a shell. Agents told to stay read-only have been seen to write anyway: checking out another branch in the build worktree (HEAD detached, branch-only files gone from disk, the next commit landing on the detached HEAD), implementing the change and committing, pushing or opening a PR, or trying to reach a production system. A subagent starts in YOUR working directory, so a repo path in its prompt does not move it. So:
 
-1. Checkpoint-commit the subject first (a plan or doc too). Create one detached snapshot of that commit PER LEG, as worktrees of the same repo: `git worktree add --detach <repo>/.claude/worktrees/review-<slug>-<leg> <checkpoint-sha>`. One per leg, so a misbehaving leg cannot change what the other legs are reading. In a worktree-bound session, run it plainly from your own worktree: `git -C <the repo's main checkout> worktree add ...` may be refused as a redirect to the shared checkout. `<REVIEW_SKILLS>/review-swarm/scripts/snapshots.sh` does this and records the baseline (see the orchestrator-run path below).
+1. Checkpoint-commit the subject first (a plan or doc too). Create one detached snapshot of that commit PER LEG, as worktrees of the same repo: `git worktree add --detach <repo>/.claude/worktrees/review-<slug>-<leg> <checkpoint-sha>`. One per leg, so a misbehaving leg cannot change what the other legs are reading. In a worktree-bound session, run it plainly from your own worktree: `git -C <the repo's main checkout> worktree add ...` may be refused as a redirect to the shared checkout. `<REVIEW_SKILLS>/review-swarm/scripts/snapshots.sh` does this and records the baseline (see `references/orchestrator-run-legs.md`).
 2. Tell each leg that its FIRST action is to enter its snapshot with the harness's worktree-entering tool (Claude Code: `EnterWorktree(path=<its snapshot>)`). That rebinds that agent alone to the snapshot, so a bare `git checkout`, `reset` or `commit` lands there, not on your branch. If the leg has no such tool, it runs every command by absolute snapshot path (`git -C <snapshot> ...`). Pass the snapshot as the repo dir to the CLI wrappers. It shares the object store, so the diff range resolves there. Remove it after the panel (`git worktree remove --force <snapshot>`). Do NOT use an agent tool's "isolated worktree" option for this: a fresh one branches from `origin/<default-branch>`, so the legs would review main, not your diff. Before launch, record a baseline for the post-panel check: the panel start time and `git ls-remote --heads origin > <scratch>/refs-before.txt`.
 3. When an agent only reads (no CLI to run), dispatch a subagent type whose tool list has no Bash, Edit or Write. A tool it does not have is a real limit; a sentence in its prompt is not.
 4. Tell each leg, in its prompt: never commit, push, open or edit a PR, merge, or touch a production system (database, deploy, secret, live API write). If it thinks a fix is needed, it REPORTS the fix.
-5. **A live key in any branch's history reaches the legs' providers.** A snapshot shares the object store, so a leg can `git show <other branch>:<file>` and send that text to Codex, Gemini, z.ai or Anthropic. When any reachable history holds a live credential: copy each key-bearing file with the key replaced into the leg's snapshot (for example `review-context/<file>.REDACTED`), name those blobs in the prompt as forbidden, build the GLM packet only from the redacted copies, and after the panel grep every leg output for the key's first characters (0 hits required) before you read a verdict.
-6. **Personal and customer data stays out of non-Anthropic legs.** For work that involves customer or personal data, build a list of the names and emails that appear in the plan, the diff and the script comments, and redact them from the WHOLE packet: docstrings, runbooks and test fixtures, not only the data blocks. Then grep the finished packet for each name, and do not send it until there are 0 hits.
+5-7. **Redaction rules.** (5) A live key in any branch's history reaches the legs' providers. (6) Personal and customer data stays out of non-Anthropic legs: names, emails and bank details stay out of the whole packet, and Codex and Gemini get a redacted export, not a git snapshot, when a name is in the subject's own diff or files. (7) `doc` mode on a personal or financial document needs a redacted copy. When any reachable branch history holds a live credential, or the subject touches customer data, bank details or a personal document, read `references/redaction-and-privacy.md` now, before you build any snapshot or packet.
 
-**If a leg cannot bind to its snapshot.** When the pre-dispatch check at the top of Step 3 says BOUND, use the orchestrator-run path below from the start; do not wait for legs to lock. It stays the reactive fallback when an UNBOUND session's leg locks anyway. A subagent that starts pinned to the build worktree can be told it entered a sibling snapshot, but its shell then LOCKS: the worktree guard refuses every command (even `pwd`) in both directories, and leaving the worktree is refused from a subagent. Do not retry and do not re-dispatch the same way. Run the legs from the orchestrator instead, one background Bash call per leg, each pointed at its own snapshot by absolute path:
-- Codex: `<REVIEW_SKILLS>/review-with-codex/codex-exec.sh --mode review --dir <snapshot> --prompt-file <SCRATCH>/codex-prompt.txt > <SCRATCH>/codex-out.txt 2>&1`.
-- Fable: `<REVIEW_SKILLS>/review-with-claude/fable-exec.sh --dir <snapshot> --diff-range <RANGE> --prompt-file <SCRATCH>/fable-prompt.txt > <SCRATCH>/fable-out.txt 2>&1` (code/build mode; omit `--diff-range` for a plan or doc review; add `--effort xhigh` when the Step 2 gate tripped).
-- Gemini: `<REVIEW_SKILLS>/review-with-gemini/gemini-exec.sh --dir <snapshot> --stdin-file <SCRATCH>/gemini-diff.txt --prompt-file <SCRATCH>/gemini-prompt.txt > <SCRATCH>/gemini-out.txt 2>&1` (the wrapper runs Gemini with cwd = `--dir`).
-- GLM: `<REVIEW_SKILLS>/review-with-glm/glm-exec.sh --prompt-file <SCRATCH>/glm-prompt.txt > <SCRATCH>/glm-out.txt 2>&1`, with the snapshot's diff/files inlined into that prompt file (it has no shell).
-
-The prompt goes in a file and each leg is ONE plain command with literal absolute paths and `--prompt-file`, so no runner script is needed to launch a leg. Three helpers in this skill's `scripts/` folder cover the parts that are easy to get wrong by hand:
-- `bash <REVIEW_SKILLS>/review-swarm/scripts/snapshots.sh <repo-root> <slug> <sha> <SCRATCH> [legs...]` creates the per-leg snapshots (default `codex gemini fable`, at `<repo-root>/.claude/worktrees/review-<slug>-<leg>`) AND moves them to the next checkpoint sha between review cycles (commit the fixes, run it again). It also re-records `<SCRATCH>/refs-before.txt` and `<SCRATCH>/panel-start.txt` on every run, so run it before each cycle's legs launch: the post-panel check then compares against that cycle, not the first.
-- `python3 <REVIEW_SKILLS>/review-swarm/scripts/glm_packet.py --body <SCRATCH>/glm-body.md --inline <file> [--inline <file> ...] --out <SCRATCH>/glm-prompt.txt` builds the GLM prompt: the body, the "no shell, no repository" note, then each file under a `=== <path> ===` header. It exits non-zero on an empty inlined file, a packet over `--max-bytes` (default 60000; GLM silently truncates above ~60 KB, so split the review into passes), or a body that promises content ("included below") that is not there, so it automates the pre-send check above. To reuse the same inlined packet for a repo-capable leg (Codex, Gemini, Fable in plan or doc mode), add `--repo-leg`: it swaps the no-shell note for one that tells the leg to also read the repo. Never hand the default packet to those legs: they read "YOU HAVE NO SHELL", report `DIR: inlined`, and never grep the claims they were asked to check.
-- `bash <REVIEW_SKILLS>/review-swarm/scripts/postpanel.sh <repo-root> <slug> <SCRATCH> [legs...]` runs the whole post-panel check below as ONE read-only command, with the same arguments you gave `snapshots.sh` (set `BUILD_WORKTREE=<path>` when the build worktree is not `<repo-root>`). It prints each part and a `REVIEW:` line for a detached build HEAD, a dirty snapshot, a write in a snapshot's reflog (commit, reset, merge, rebase), or a changed remote branch; exit 0 clean, 1 review, 2 usage. It lists your recent PRs (needs the `gh` CLI) but cannot know which ones you opened, so read that part yourself. The scripts' tests live in `scripts/tests` (`python3 -m pytest scripts/tests`).
-
-Then run the post-panel check as usual (or `postpanel.sh`). The snapshots still protect you: each CLI reads its own copy, never the build worktree.
-
-An orchestrator-run leg that exits 0 but leaves an empty output file is a **failed leg, not a clean one**. The Gemini wrapper hides stderr on success, so nothing says why. Check each output file for the `MODEL:` line before you read the verdict, re-run an empty leg once on its own, and mark it `unavailable` only if the re-run is empty too. A Gemini leg can also die outright with `JavaScript heap out of memory` inside its regex engine on one particular input; re-run once, and if it dies the same way, mark the leg `unavailable`. A Fable leg can also exit 0 with only a short closing note and no `MODEL:` line, after a blocked tool call. The wrapper keeps only the final message, so the review is lost. Put "no cloud or credential commands; full report in the FINAL message" in every Fable prompt, and re-run such a leg once (`review-with-claude` Edge Cases).
-
-Anyone who still writes a runner script must not have it call `timeout`: macOS has no such binary (`timeout: command not found`, rc 127), and the leg dies before its CLI starts. Rely on each wrapper's own `--timeout`, or use `gtimeout` only when `command -v gtimeout` finds it.
+**If a leg cannot bind to its snapshot.** When the pre-dispatch check says BOUND, an UNBOUND session's leg locks anyway, or a leg's subagent dispatch fails outright, run the legs from the orchestrator, one background Bash call per leg, each at its own snapshot. Read `references/orchestrator-run-legs.md` now, before you launch any leg: it holds the per-leg commands, the helper scripts (`snapshots.sh`, `glm_packet.py`, `postpanel.sh`), the empty-output and heap rules, and the degraded-host dispatch fallback (a leg's subagent dispatch fails outright).
 
 **Post-panel check (mandatory, after the last leg lands, before Step 4 and before you remove the snapshots).** In the build worktree:
 
@@ -244,8 +191,7 @@ git ls-remote --heads origin | diff <scratch>/refs-before.txt -   # new or moved
 gh pr list --author @me --state all --limit 5    # no PR you did not open (this repo)
 gh search prs --author @me --created ">=<panel-start>"   # no PR you did not open (any repo)
 ```
-
-In a worktree-bound session, run `scripts/postpanel.sh` (above) as one command, or run each line above as its own command; a harness guard may refuse the combined block and `git -C <each snapshot> reflog -5` as a redirect to another worktree. Read each snapshot's reflog as a file instead, one line per entry: `cat <repo>/.git/worktrees/<snapshot-name>/logs/HEAD`. A clean snapshot shows only its creation line.
+In a worktree-bound session, run this check as `references/orchestrator-run-legs.md` says (`postpanel.sh`, or one command per line, with each snapshot's reflog read as a file).
 
 Another session can move a remote branch during the panel too; attribute each ref change before you call it clean.
 
@@ -253,16 +199,10 @@ Treat any unexpected commit, push, branch or PR as **out-of-process work**: stop
 
 **Remove the snapshots before you run the repo's own gates.** The snapshots sit inside the repo under review (`.claude/worktrees/review-<slug>-<leg>`). A gate that scans the whole tree, such as a scrub check or a validator test, then also scans the snapshots and fails on their fixture files. After the post-panel check is clean, run `git worktree remove --force <snapshot>` for each one, then run the gates (`snapshots.sh` recreates them at the next checkpoint for the next cycle).
 
-**Do not fork-bomb a small host.** Each leg spawns a heavy CLI; four launched at once on a modest machine can exhaust the process table and kill a leg outright. On a resource-limited host, cap concurrency - run the legs two at a time rather than all four - and prefer this restraint whenever the diff is small enough that the panel overhead dwarfs the change (see Scale to the subject: a trivial change does not get the full four-CLI panel at all).
-
-**Degraded-host dispatch fallback.** If a leg's SUBAGENT dispatch fails outright (for example the harness reports a Claude usage limit, HTTP 429, on the subagent call) while the orchestrator's own turn keeps working, the leg is not unavailable yet. Run its CLI directly instead: write the same shared prompt to a file (a session-unique path in the scratch directory), then call the leg's bundled wrapper (`codex-exec.sh`, `gemini-exec.sh`, `glm-exec.sh`, or `fable-exec.sh`) as ONE plain command with `--prompt-file <that file>` and literal absolute paths (as background calls, so the four run in parallel). Collect each output exactly as a leg report (including the `MODEL:` line) and synthesize normally. This is the orchestrator running the CLI, not adding its own opinion. Host-specific failures and their fixes live in the sibling skills: Codex's sandbox cannot start without user namespaces (`review-with-codex`), Gemini cannot read git-ignored paths and can burn its timeout in a `500 INTERNAL` retry storm (`review-with-gemini`), and a Fable leg must not run suites or background tasks (`review-with-claude`).
-
 ### Step 4 - Normalise and cross-check
 For each returned finding: tag its source model, and **cross-check every `file:line` reference from the models against the real files** before trusting it (models occasionally hallucinate paths). Drop or flag references that do not exist.
 
-**A leg that cannot run commands cannot report command output.** The GLM leg sees only the text its subagent inlined; it has no shell and no repo access. If its report claims "I ran X" with output, commit SHAs, file listings, or machine state, treat that evidence as UNVERIFIED: check the cited commits, files, and paths yourself. If they do not exist, the leg fabricated them. Exclude that leg from the consensus denominator and say so in the header (e.g. `GLM (excluded: fabricated evidence)`), even when its verdict is "clean". A leg without a shell can report a non-existent commit, a non-existent CI file, and false repo state, all under a "no defects" verdict.
-
-**A finding that rests on vendor or API documentation is re-checked before it decides anything.** Legs often quote a page from memory, and the quote can come from an older version. Before you adopt OR reject such a finding: re-fetch the page, note its last-updated date, and quote the current text. Where a live probe exists (a validate-only or dry-run call, a read), settle the claim with it. Record which source decided it.
+Three checks belong here when they apply: a leg that cannot run commands reports command output, a finding rests on vendor or API documentation, or a finding says tests leak state. Read `references/synthesis.md` now, before you adopt or reject such a finding.
 
 ### Step 5 - Synthesize (the orchestrator's only judgement call)
 Merge the four lists into one. **Deduplicate**: the same issue raised by more than one model becomes a single row, attributed to all who flagged it, with a **consensus tag** (out of the number that ran):
@@ -279,32 +219,7 @@ Rank by severity, then by consensus. **Name the exact model each leg ran** in th
 
 **Keep the three types separate in the output.** Carry each finding's `Type` through to the table, and split the actionable lists: **Must-fix defects** hold the gate; **Advisory** items (enhancements and below-the-bar defects) do not - they are logged, not built, and the caller does not fold them into a "fix" without the owner's go-ahead. **Simplify** items are applied by the caller when the removed thing is outside THE ASK and the ask's own tests still pass; a simplify item that would remove a guard the ask names goes to the owner as a decision. A panel that returns no must-fix defect is a CLEAN gate result.
 
-```
-## Review Swarm - <mode>: <subject>
-Models: Codex (<model>, <status>) · Gemini (<model>, <status>) · GLM (<model>, <status>) · Fable (<model>, <status>)
-
-### Findings
-| # | Type | Severity | Consensus | Finding | Location | Action |
-|---|------|----------|-----------|---------|----------|--------|
-| 1 | defect      | Critical | 4/4       | ...     | file:line| ...    |
-| 2 | defect      | High     | 2/4 (C,F) | ...     | file:line| ...    |
-| 3 | enhancement | Medium   | 1/4 (GLM) | ...     | file:line| log as follow-up; owner decides |
-
-### Must-fix defects (before ship/act)
-1. ...
-
-### Simplify (remove; outside the ask)
-1. ...
-
-### Advisory (NOT for this build - one line each, log as follow-ups)
-1. ...
-
-### Agreed clean
-[Areas all available models checked and passed, with the evidence - not a bare "looks fine".]
-
-### Disagreements worth a closer look
-[Where models contradict each other. Offer /review-debate to litigate.]
-```
+**Report format.** Read `references/synthesis.md` now, before you present: it holds the exact report template (header, findings table, must-fix, simplify, advisory, agreed clean, disagreements).
 
 ### Step 6 - Follow up
 
@@ -322,7 +237,7 @@ Models: Codex (<model>, <status>) · Gemini (<model>, <status>) · GLM (<model>,
 | GLM unfunded (`1113`) | Report "GLM: unfunded - fund your z.ai account"; continue with the rest. Never treat the billing error as a finding. |
 | Fable not logged in (`::FABLE-NOAUTH::`) | Report "Fable: not logged in - sign in to Claude Code on this machine"; continue with the rest. Not a finding. |
 | Codex emits nothing / a streaming leg wedges | Treat as a wedged handshake, not "clean" - relaunch that leg attached once, else mark unavailable. **Does NOT apply to Fable**: `claude -p` text mode emits nothing until completion by design, so judge the Fable leg by its wrapper's rc / `::FABLE-TIMEOUT::`, never by silence. |
-| A leg's SUBAGENT dispatch fails (e.g. Claude usage limit, HTTP 429) while the orchestrator still runs | Not a down leg yet: run that leg's wrapper directly from the orchestrator (Step 3, "Degraded-host dispatch fallback"). Mark it `unavailable` only if the direct run also fails. |
+| A leg's SUBAGENT dispatch fails (e.g. Claude usage limit, HTTP 429) while the orchestrator still runs | Not a down leg yet: run that leg's wrapper directly from the orchestrator (`references/orchestrator-run-legs.md`, "Degraded-host dispatch fallback"). Mark it `unavailable` only if the direct run also fails. |
 | All four unavailable | Do NOT fake a review. Report that no model ran and why; suggest fixing the failing prerequisite. |
 | Empty diff (code mode) | Say so; offer a branch diff, a specific file, or a different mode. |
 | Waiting for legs on a shared machine | Wait on the background task ids and output files YOU launched, with a timeout. Never wait by process name (`pgrep`): it can match another session's review processes and never finish. |
@@ -335,8 +250,10 @@ A fast panel, called by the user or by `dev-quick-build`: the same four models, 
 - **Same four legs, same shared prompt, one round.** Launch all four together (Step 3). There is no re-review round: after fixes, the user asks for a new run (a caller follows its own rule).
 - **Codex stays at `xhigh`** (Step 2). **Fable runs at `high`**: skip the Step 2 effort gate.
 - **Every wrapper call gets `--timeout 570`, and GLM also gets `--retries 0`.** 570 s is 30 s under the Bash tool's 10-minute cap, so the wrapper stops the CLI itself. GLM's timeout is per request and it retries a timeout once by default, so without `--retries 0` it can run about 19 minutes. Put the flags in each leg's prompt (subagent legs) or in each command (orchestrator-run legs).
-- **One attempt per leg.** Synthesize when all four have returned; each returns within about 10 minutes of its wrapper start. A leg that timed out or failed is `unavailable`. Quick mode overrides every other wait or retry rule in this skill: the Step 3 force-background wait, the Step 3 re-run-once rules (empty output, heap OOM, Fable with no `MODEL:` line), and the Graceful degradation relaunch. A nudge that only makes a leg wait for its own running CLI is fine; never start a leg's CLI a second time. Head the output `## Review Swarm (quick) - <mode>: <subject>`. With a 30-48 KB packet inlined into every leg's prompt, Gemini and Fable timed out at 570 s in most quick panels, so keep the inlined packet for GLM only. Give the repo-capable legs (Codex, Gemini, Fable) a short prompt that names the files or the diff file to read, and report a 2-leg panel as degraded.
-- **When you cannot run background calls** (a bound, unattended session whose rules ban background Bash), run the four orchestrator-run legs from ONE foreground runner script: it starts each wrapper command from Step 3 with `&`, then runs `wait`, then prints each output file's size and `MODEL:` line. Each wrapper has `--timeout 570`, so the one call fits the 10-minute Bash cap; give it the 600000 ms timeout. Record a failed leg and synthesize from the others.
+- **One attempt per leg.** Synthesize when all four have returned; each returns within about 10 minutes of its wrapper start. A leg that timed out or failed is `unavailable`. Quick mode overrides every other wait or retry rule in this skill: the force-background wait, the re-run-once rules (empty output, heap OOM, Fable with no `MODEL:` line), and the Graceful degradation relaunch. A nudge that only makes a leg wait for its own running CLI is fine; never start a leg's CLI a second time. Head the output `## Review Swarm (quick) - <mode>: <subject>`.
+
+Quick mode with a large inlined packet, a Codex leg on a large repo, a session that cannot run background calls, or a decision or doc review (the Codex `TIME LIMIT` line): read `references/quick-mode-details.md` and `references/leg-troubleshooting.md` now, before you launch the legs.
+
 - **Not for risky subjects.** When the subject touches authz, a migration, secrets, money or billing, security, or a write or delete of production or customer data, or you are unsure, say so and run the full panel.
 - **Other rules still apply.** A trivial change still gets one model (above), which is faster still. On a host too small for four legs at once, say that quick mode cannot hold 10 minutes, then run the legs two at a time.
 - **Callers.** The user, and `dev-quick-build` for its plan review (below). `dev-auto-build` keeps the full panel.
@@ -346,17 +263,5 @@ A quick build is one small feature, so its review is sized for speed:
 - **Quick mode (above), one round, for every quick build.** Give it the same shared prompt as a full panel (THE ASK, NON-GOALS, the finding fields, the must-fix rule, `simplify`) plus the caller's questions. Quick mode's "Not for risky subjects" rule does not apply here: a quick build that touches authz, a migration, secrets, or a production or customer data write (money movement included) gets the same four-model panel.
 - **If every leg fails,** proceed without a model review and say so in the plan document; the build's own later code review still runs.
 - **No re-review round** unless a fix changed the approach; then re-run the same review once.
-
-## Example invocations
-
-```
-/review-swarm code                                  # uncommitted changes
-/review-swarm code src/app/billing.ts               # a specific file
-/review-swarm build                                 # this branch vs main (feature diff)
-/review-swarm quick build                           # same, ~10-minute panel (not for risky subjects)
-/review-swarm plan docs/plans/2026-09-02-thing.md   # a plan before building
-/review-swarm decision "move the CDP from Firestore to Postgres"
-/review-swarm doc ~/Downloads/share-transfer-484.md # a document before acting on it
-```
 
 **Four models, one synthesized verdict, consensus-tagged: three independent external models plus a deep-reasoning Fable leg. The orchestrator never grades its own homework.**

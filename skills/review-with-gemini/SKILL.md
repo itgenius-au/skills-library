@@ -10,7 +10,7 @@ Runs Google's Gemini CLI (`gemini -p`) headlessly to get independent analysis fr
 
 Every call goes through a **bundled safety wrapper**, `gemini-exec.sh`, that ships in this skill's own directory, together with `review-policy.toml` (a read-only tool policy). You never hand-run raw `gemini -p`.
 
-**The default model is `gemini-4-argon`** (Google's top model at the time of writing; it has a 1M-token input window). `gemini-exec.sh` sets it; do not pass `--model` for a normal review. **If your key is refused for that model** (not found, no permission, or no quota, for example on a free key), the wrapper re-runs once on `gemini-3.8-flash` and prints `::GEMINI-FALLBACK::`. The re-run gets only the time left on `--timeout` (none if under 30 s), so the call still ends inside its timeout. Only the CLI's stderr decides a refusal. A timeout, a bad key (400) or a busy server (503) never falls back. An explicit `--model` is never swapped. Gemini CLI has no effort/thinking flag, so the model's built-in thinking is what you get; "reasoning effort high" in this skill is prompt framing, not a settable knob.
+**The wrapper pins the default model** (Google's top model at the time of writing; it has a 1M-token input window). `gemini-exec.sh` sets it in its `MODEL` variable, which is the only place model names live in this skill; do not pass `--model` for a normal review. **If your key is refused for that model** (not found, no permission, or no quota, for example on a free key), the wrapper re-runs once on the fallback model (`FALLBACK_MODEL` in the same script) and prints `::GEMINI-FALLBACK::`. The re-run gets only the time left on `--timeout` (none if under 30 s), so the call still ends inside its timeout. Only the CLI's stderr decides a refusal. A timeout, a bad key (400) or a busy server (503) never falls back. An explicit `--model` is never swapped. Gemini CLI has no effort/thinking flag, so the model's built-in thinking is what you get; "reasoning effort high" in this skill is prompt framing, not a settable knob.
 
 ## Core Principle: Verify Empirically, Don't Trust Docs
 
@@ -97,7 +97,19 @@ Get a Gemini API key from Google AI Studio (a free key works, about 1,000 reques
 export GEMINI_API_KEY=...   # e.g. loaded from your secret manager
 ```
 
-The wrapper needs `GEMINI_API_KEY` in its environment and exits 2 with a clear message when it is missing. It never writes the key to disk. Never hard-code the key in source or use someone else's key.
+If your harness bans `export` in commands (see "Invocation form" below), set the key at harness level instead, in the `env` block of `~/.claude/settings.json`, so every command the agent runs inherits it:
+
+```json
+{
+  "env": {
+    "GEMINI_API_KEY": "your_api_key"
+  }
+}
+```
+
+Warning: this file holds the key in plain text. Keep it out of version control and shared backups, and prefer a secret manager where you have one.
+
+The wrapper needs `GEMINI_API_KEY` in its environment and exits 2 with a clear message when it is missing. The wrapper never writes the key to disk. Never hard-code the key in source or use someone else's key.
 
 ## Invocation form (works in restrictive agent harnesses)
 
@@ -135,7 +147,7 @@ Placeholders (used throughout this skill):
 - the prompt - built from your `--prompt-file` (or `-- "PROMPT"`); anything given via `--stdin-file` is added on stdin after the prompt.
 - `--approval-mode default` - Gemini's normal mode. In a headless run it can read files and list and search the workspace.
 - `--policy <SKILL_DIR>/review-policy.toml` - the read-only review policy bundled with this skill. It denies the shell, file-write, edit and memory tools by name, so Gemini cannot use them. It also denies Google web search: that tool can loop on HTTP 500 retries for a whole panel time budget and return nothing.
-- `-m` (default `gemini-4-argon`, override with `--model`) - review model. A refused default falls back once to `gemini-3.8-flash`, inside the same `--timeout`. The wrapper prints `::GEMINI-MODEL:: <id>` on stderr: the model that actually ran.
+- `-m` (the default model, override with `--model`) - review model. A refused default falls back once to the fallback model, inside the same `--timeout`. The wrapper prints `::GEMINI-MODEL:: <id>` on stderr: the model that actually ran.
 - `-o text` - plain text output (no JSON, no formatting artifacts).
 - `--skip-trust` - trust the workspace for this session. Needed: in a folder Gemini has not trusted (for example a fresh worktree), headless runs otherwise change behaviour or abort with no useful output.
 - `--dir <PROJECT_DIR>` - sets Gemini's workspace (its cwd) so it can read the files under review.
@@ -331,7 +343,7 @@ Gemini's API sometimes returns 503 / `UNAVAILABLE` / "model is currently experie
 
 A `500 INTERNAL` behaves differently: the CLI's own retry loop can burn the WHOLE call timeout with no output (`status: 500` repeated in stderr). Do not just raise the timeout. Retry once with the review packet inlined on stdin (so Gemini makes no file-tool calls, which are retried too) and cap it at about 600 s; if that also fails, surface it as above.
 
-A 503 "high demand" storm can burn the whole timeout the same way: the output holds only `Attempt N failed with status 503. Retrying with backoff...` lines and no review. After one failed re-run, mark the leg unavailable and stop retrying. A third attempt in the same window only costs time. If Gemini times out on every run on one host, run it in the background, mark it unavailable at the first timeout, and do not wait for it.
+A 503 "high demand" storm can burn the whole timeout the same way: the output holds only `Attempt N failed with status 503. Retrying with backoff...` lines and no review. After one failed re-run, mark the leg unavailable and stop retrying. A third attempt in the same window only costs time. A run that ends at the timeout (exit 124) with `TypeError: fetch failed sending request` retry lines is the same transient class: one re-run with the input cut to the code only and a longer `--timeout` can complete where the first run did not, and a second failure means unavailable. If Gemini times out on every run on one host for days, treat it as a host outage: run it in the background, mark it unavailable at the first timeout, and do not wait for it. Once the outage ends, go back to the one-re-run rule above. Inside a `review-swarm` quick panel its own one-attempt rule wins.
 
 ### 4c. Handle Gemini's "I need help" responses
 
@@ -437,10 +449,7 @@ Multiple independent models reviewing the same code catch more issues than any s
 
 ### Model Selection
 
-The wrapper pins `gemini-4-argon` by default. Models you may see on an AI Studio key:
-- `gemini-4-argon` - Google's top model (the default), 1M-token input window, thinks by default
-- `gemini-3.8-flash` - the automatic fallback when the key is refused for the default
-- older `gemini-3.x` pro/flash builds and `gemini-2.5-pro` / `gemini-2.5-flash` - several generations behind; last resort
+The default and fallback models are the `MODEL` and `FALLBACK_MODEL` variables near the top of `gemini-exec.sh`. That is the only place to change them; this file deliberately names no version, because versions rot. The default is Google's top model, with a 1M-token input window and built-in thinking. The fallback is a faster model that a free key is more likely to be allowed to call. Older builds are several generations behind and a last resort.
 
 To check for a newer model, list what your key can call: `GET https://generativelanguage.googleapis.com/v1beta/models` with your key in the `x-goog-api-key` header, then test one short call before you change the pin.
 

@@ -17,6 +17,18 @@ executive summaries, checked PDFs, and a pass that strips the AI tells out of yo
 
 Restart Claude Code (or start a new session) so the skills load.
 
+## Start here
+
+Three common ways in:
+
+- **Build a feature.** Describe your idea, then run `dev-brainstorming` to agree a design and
+  `dev-writing-plans` to turn it into a plan. For one small change, go straight to
+  `dev-quick-build`.
+- **Get a second opinion.** Run `review-swarm` over a plan, a decision, or a code change. Add
+  `quick` for a faster panel.
+- **Run Claude Code on a VM.** Follow the [setup spec](./docs/claude-code-vm-setup-spec.md) to
+  keep Claude Code running all the time and steer it from your phone.
+
 ## What's inside
 
 ### The dev process
@@ -64,6 +76,8 @@ Keep the repo, the machine, and the session clean.
 | `repo-context-cleanup` | Audit and trim the context Claude Code loads every session: CLAUDE.md files and the auto-memory store. |
 | `machine-move` | Sync every repo before you switch machines (no uncommitted or unpushed work left behind), then set up the new machine. |
 | `dev-update-env` | Audit and update CLI tools, MCP servers, and system packages on macOS or Linux, with one summary table and confirmation before any update. |
+| `session-recovery` | Find background Claude Code sessions that went offline, check what each one was doing, and wake the ones you choose on their own threads. |
+| `claude-vm-ops` | Operate a Claude Code VM safely: diagnose slowness, a lost or expiring sign-in, a full disk, or servers on an old version. Changes nothing without your approval. |
 | `plugin-fresh-install-test` | Test what a brand-new machine actually gets from a Claude Code plugin (skills, SessionStart context, guards), graded from events, not the model's self-report. |
 
 ### Writing and daily
@@ -84,7 +98,7 @@ Keep the repo, the machine, and the session clean.
 ### Renamed skills
 
 Version 1.2.0 renamed several skills to match the names we use in-house. The old
-names still work: each one is a small alias that forwards to the new skill.
+names still work until 2026-11-21: each one is a small alias that forwards to the new skill.
 
 | Old name | New name |
 |---|---|
@@ -122,7 +136,14 @@ You only need the tools for the skills you use.
 - **`dev-brainstorming`** visual companion: Node.js. The rest of the skill needs nothing.
 - **`plugin-fresh-install-test`**: the `claude` CLI and `jq`.
 - **`review-swarm`** post-panel check (`postpanel.sh`): the `gh` CLI.
-- **`session-status-sweep`, `repo-health-sweep`**: Python 3.
+- **`session-status-sweep`, `repo-health-sweep`, `session-dsp`**: Python 3.
+- **`session-recovery`**: Python 3 and the `claude` CLI, on the machine that runs the sessions.
+- **`claude-vm-ops`**: a systemd-based Linux VM, laid out as in the VM guide. SSH access, with
+  passwordless `sudo` for the admin user, plus Python 3 and `jq` on the VM. The update path also
+  uses `npm` and the `claude` CLI. Its tests use `pytest`.
+- **`dev-deploy-safely`** gate scripts (`gate-merge.sh`, `pr-checks-green.sh`): the `gh` CLI and
+  Python 3.
+- **`review-swarm`** private-repo export (`redacted_export.py`): Python 3.12 or later.
 - **Build and deploy skills**: adapt the deploy examples (containers, static,
   file hosts) to your own stack. They call the review skills above for their
   review gates.
@@ -150,8 +171,8 @@ attribution and both license texts are in
 
 ## Contributing
 
-Issues and pull requests welcome. Keep skills provider-accurate, avoid
-hard-coding model versions or secrets, and match the existing SKILL.md style.
+Issues and pull requests welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md). To report a
+security problem, see [SECURITY.md](./SECURITY.md).
 
 ## License
 

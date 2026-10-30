@@ -32,9 +32,10 @@ the production URL and the deploy record says so.
 > "confirm before deploy" default, scoped to this flow (full detail + the exhaustive
 > stop-list in Phase 7). The ONLY reasons to stop are: a mandatory gate fails or
 > cannot run, the scope gate trips mid-build (migration / authz / multi-subsystem),
-> or a genuine product/design/trust decision surfaces. "Wait for approval on a
-> passing build" is never one of them. If you catch yourself asking the user to okay
-> a green deploy, re-read this line and proceed instead.
+> a cost-saving build misses its code budget or pass mark, or a genuine
+> product/design/trust decision surfaces. "Wait for approval on a passing build" is
+> never one of them. If you catch yourself asking the user to okay a green deploy,
+> re-read this line and proceed instead.
 
 > **Ship it LIVE, not dark.** "Done" means the change is serving real users in
 > production, observably doing its job. "Dark" has TWO forms and BOTH are banned as a
@@ -55,6 +56,21 @@ the production URL and the deploy record says so.
 > and then you SAY so, record why, and hand the user the single flip that is left.
 > Absent that, a flag you introduced is enabled before you call the build done.
 
+## Reference files (read the file when its row applies)
+
+This file holds the scope gate, the eight phases, the deploy stop list (Phase 7) and the rules that apply on every build. Edge cases, worked examples and rare branches live in `references/` beside it. Open a file when its row applies, and open it BEFORE the step it names: a row is an instruction, not a link to skim. Text past the first screens of this file is not kept after a compaction: after one, re-read Phase 6, the Phase 7 stop list and Phase 8 in this file before you deploy.
+
+| When | Read now |
+|---|---|
+| The ask exists to cut cost (money, tokens or spend) | `references/cost-saving-build.md`, before Phase 3 |
+| Phase 3: the change is text only or small and you want ONE combined review instead of the plan review plus the Phase 6 panel | `references/phase-3-one-pass-review.md`, before you choose it |
+| Phase 3: the build introduces a NEW name that cannot be renamed in place, or a NEW cloud resource with a location | `references/phase-3-names-and-locations.md`, before Phase 4 |
+| Phase 5, before the full suite: the change altered what a generated docs or fact artifact describes, or a rule or default changed; or a gate fails or times out for a reason outside your diff, or you run a mutation pass | `references/phase-5-gate-notes.md` |
+| Phase 6: you launch any review or investigation agent (with the Agent tool in the usual case) | `references/phase-6-agent-panel.md`, before you launch any agent |
+| Phase 6: the diff includes an ops script that changes live host state | `references/phase-6-live-host-harness.md` |
+| Phase 7, before the deploy when another build may be shipping the same project, or when two builds race one project or a push to main is rejected | `references/deploy-contention.md` |
+| You need the model or effort a role runs at (gate runs, plan review, one-pass review, panel agents) | `references/models.md` |
+
 ## Scope gate (run this first, in your head)
 
 Quick Build fits: one feature, one project, roughly ≤ a day of work, no schema
@@ -74,6 +90,8 @@ did not touch. And do not start unrequested work mid-build - no ripple-fixing un
 doing? LOG it in the runbook Follow-ups and move on; do it only if the user says yes. This holds
 double when the user is away: unsupervised means tighter scope, never looser - an OK for this feature
 is not an OK for the adjacent thing you noticed.
+
+**A cost-saving build states its payoff and a code budget.** This applies only when the ask exists to cut cost (money, tokens or spend); every other build skips it. For such a build, read `references/cost-saving-build.md` now, before Phase 3: it sets the three runbook lines, the code budget, and the two stops that the Phase 7 stop list names.
 
 **Refuse by default only where it is earned.** In the thing you build (not the deploy and CI
 gates, which still abort), a refusal, a typed confirmation token, or a "stop until a named person
@@ -144,24 +162,17 @@ the same miss caught in the Phase 6 diff review costs a rebuild.
 
 - **Size the review for a quick build.** Run the **`review-swarm`** skill's "Quick-build
   review" in `plan` mode on the runbook (`docs/plans/YYYY-MM-DD-<slug>-quick-build.md`): the
-  swarm's quick mode (all four models, Codex at `xhigh`, each leg capped at 570 s), one round,
-  for every quick build, including one that touches authz, a migration,
-  secrets, or a write or delete of production or customer data (money movement included).
-  Every model gets the runbook's "Ask (verbatim)" as THE ASK. Ask four questions: is the
-  chosen semantic correct against the data model; is any data-source assumption still
-  unverified; is the scope still inside the quick-build gate; and what in this plan is beyond
-  the ask or would block the user's normal path (`simplify`). Why: a full four-model panel at
-  `xhigh` can take 6-14 minutes a pass, and plan reviews that run to 15-50 minutes in total
-  defeat the point of a fast path. Keep Codex at `xhigh` (do not drop it to `high` to save
-  time); quick mode's per-leg cap keeps the whole panel to about 10 minutes.
-- **One pass for a small change.** When the change is text only or small (about
-  100 lines or fewer) and touches no authz, migration, secrets, or production or customer
-  data write, you may run ONE combined review after Phase 5 instead of this plan review
-  plus the Phase 6 panel: commit a checkpoint, then run `review-with-codex`'s
-  `snapshot-review.sh` on it with `--effort high --timeout 600` (a plain copy plus a
-  merge-base diff; see that skill). Give it the runbook's "Ask (verbatim)", the four questions above, and the
-  Phase 6 test-adequacy question. Record "one pass" and the reason in the runbook Build log;
-  Phase 6 is then done. The rule is one review pass sized to the risk.
+  swarm's quick mode (all four models, the Codex leg at its top review effort, each leg capped at
+  570 s; see `references/models.md`), one round, for every quick build, including one that
+  touches authz, a migration, secrets, or a write or delete of production or customer data
+  (money movement included). Every model gets the runbook's "Ask (verbatim)" as THE ASK. Ask four
+  questions: is the chosen semantic correct against the data model; is any data-source assumption
+  still unverified; is the scope still inside the quick-build gate; and what in this plan is beyond
+  the ask or would block the user's normal path (`simplify`). Why: a full four-model panel at top
+  effort can take 6-14 minutes a pass, and plan reviews that run to 15-50 minutes in total
+  defeat the point of a fast path. Do not lower the Codex effort to save time; quick mode's
+  per-leg cap keeps the whole panel to about 10 minutes.
+- **One pass for a small change.** A text-only or small change (about 100 lines or fewer) that touches no authz, migration, secrets, or production or customer data write may run ONE combined review after Phase 5 instead of this plan review plus the Phase 6 panel. Read `references/phase-3-one-pass-review.md` now, before you choose it: it holds the command, the questions to give it, and the case where one pass is NOT allowed (code that hides or checks sensitive data).
 - **Time budget.** Each model gets 10 minutes. A model that has not returned is
   `unavailable`: no retry, proceed without it. Record each review's wall-clock time in
   the runbook Build log; the target is 15 minutes or less of review for the whole build.
@@ -177,35 +188,11 @@ the same miss caught in the Phase 6 diff review costs a rebuild.
   never self-adopt it. Record the review result (models run, what changed) in the
   runbook's Build log section.
 - This is a gate, not a formality. If a reviewer surfaces that the ask needs a
-  migration, an authz/tier-gate change, or a multi-subsystem blast radius, the
+  migration, an authz/tier-gate change, or a multi-subsystem reach, the
   scope gate has tripped - STOP and route to `dev-writing-plans` / `dev-brainstorming`
   (the Phase 7 stop-list applies here too). If a genuine product / design / trust
   decision surfaces, escalate to the user rather than settling it inside the plan.
-- **Naming check (immutable names only; escalate only on a miss).** Phase 2
-  surfaced where the code lives and what precedents exist. Before writing code,
-  check every NEW name this build introduces that cannot be renamed in place, where
-  a rename means delete-and-recreate or a data migration: a deployed service,
-  service account, storage bucket, secret, data-warehouse dataset and table, database,
-  table and column names, etc. Check infra names against your project's naming
-  conventions and schema names against its existing patterns. Mutable names (files,
-  modules, the branch, functions, UI components, routes) never pause the build: follow
-  the project's existing patterns and go on. An immutable name that conforms proceeds
-  silently - this stays the no-pause fast path. But a name that does NOT conform, or
-  has no precedent to follow, is a genuine design decision: STOP and escalate it to the
-  user for a naming call before Phase 4 (the same escalation this phase already makes
-  for a design/trust decision). Ask in chat: show each candidate name as exact text in
-  a code span and take the reply in chat. Do NOT put a name choice in a multiple-choice
-  question pop-up: its short option labels make the agent shorten or rewrite names, so
-  the exact spelling is lost. Record the chosen names in the runbook Decisions section.
-- **Cloud location check (same rule: escalate only on a miss).** For every NEW cloud
-  resource with a region or location (a deployed service, database instance, data-warehouse
-  dataset, storage bucket, registry repository), write its location in the runbook beside
-  its name and check it against your project's location rules (in short: co-locate with the
-  resources it talks to, measured live with your cloud CLI; a regional service never takes a
-  multi-region location). A conforming location proceeds silently. Any other location is a
-  design decision: STOP and escalate it in chat with its reason, before Phase 4.
-  A location cannot change after create. Pass it explicitly (`--region` /
-  `--location`) on every create command; never let a tool's default decide.
+- **Naming and cloud location checks (immutable names only; escalate only on a miss).** When this build introduces a NEW name that cannot be renamed in place (a deployed service, service account, storage bucket, secret, data-warehouse dataset or table, database, table or column) or a NEW cloud resource with a region or location, read `references/phase-3-names-and-locations.md` now, before Phase 4. A name or location that does not conform is a STOP: escalate it in chat before Phase 4. A conforming one proceeds silently, with no pause.
 - **Scope check before code.** Always write one line in the runbook Decisions: "Asked:
   X. Planned: Y." If the review made the plan bigger - a new flag, mode, guard, confirmation step, script, or dependency the
   ask did not name - STOP and show the user one line: "You asked for X. The plan now
@@ -245,41 +232,21 @@ Frontend: full `npm test` + `npm run build` (tsc + bundler). Backend touched:
 Fresh worktrees need `npm ci` first. Record counts in the runbook.
 
 **Run the gates through a test-runner subagent.** Dispatch the full gate run to a
-cheaper-model subagent (Agent tool) with the exact commands, the repo path and any tool path it
-needs. It returns a pass/fail digest with each failing test and its error, so the full output
-stays out of this context. Run a gate inline only to re-run one failing test while you fix it, or
-when the command needs interaction. Long build sessions that run many full test suites inline can
-reach very large contexts on the top model.
+cheaper-model subagent (Agent tool; the model is in `references/models.md`) with the exact
+commands, the repo path and any tool path it needs. It returns a pass/fail digest with each
+failing test and its error, so the full output stays out of this context. Run a gate inline only to
+re-run one failing test while you fix it, or when the command needs interaction. Long build sessions
+that run many full test suites inline can reach very large contexts on the top model.
+A full gate run that can take close to 10 minutes does not fit one foreground shell call (the usual
+cap is 10 minutes). Tell the subagent to run its parts (for example each suite of a multi-suite
+runner) in separate calls, so each returns its own digest. A gate run that timed out is not a pass:
+run the parts that did not finish before review.
 
-On Node 25 or later, run vitest with jsdom as `NODE_OPTIONS=--no-experimental-webstorage npm test`.
-Node's own `localStorage` global hides jsdom's, so every test that touches storage fails with
-"Cannot read properties of undefined (reading 'getItem')". A flag on `node` alone does not reach
-the vitest workers. Check `node --version` and the CI Node version before you treat a mass storage
-failure as your change.
+**Gate-run problems and old values.** Before the full suite, when the change altered what a generated docs or fact artifact describes (regenerate it first) or removes or flips a rule or default, and when a gate fails or times out for a reason outside your diff (Node 25 or later, a loaded shared machine), or before you run a mutation pass, read `references/phase-5-gate-notes.md` now, before you debug or review.
 
-On a shared machine under load (check `uptime`), a full test run can time out tests in areas your
-diff never touched. Before you debug them, run a control: run the failing files alone, then run the
-same full suite on an unmodified copy of `origin/<default-branch>` on the same machine
-(`git archive origin/<default-branch> | tar -x -C <empty tmp dir>`, reusing the installed
-dependencies read-only, for example a symlinked `node_modules`). If the default branch times out the
-same way, record both results in the runbook and let CI's runner decide. Never raise per-test
-timeouts to make a loaded local run pass.
-
-If your change altered anything a machine-checked docs/fact artifact describes (endpoints,
-migration/schema head, scheduled jobs, page-access columns, etc.), regenerate that artifact
-before running the full suite - a stale one fails a drift test unrelated to your change and
-reads as a surprise red instead of an expected step.
-
-**Old values after a rule change.** When the change removes or flips a rule or default (a payment term,
-a switch's default), grep the whole repo for the old value before the first review: `docs/`,
-`docs/plans/` runbooks, skill text, script `--help` text and test names. Fix each hit or add a
-supersede note, and list the hits in the runbook. (Otherwise an adversarial pass keeps finding the
-stale text, a different file each round.)
-
-**Mutation testing runs on a copy.** If you run a mutation pass, run it on a plain copy of the
-checkpoint with its own virtualenv, never in the build worktree. An in-place pass rewrites source
-files, so it cannot overlap the full suite or a review, and a review that reads mutated source reports
-false findings.
+**Do not edit the tree while the gates run.** An edit made during a full gate run (or while a
+background watcher reads the tree) gives a false red or a false green. Run the gates again on the
+final head with no edits during the run, and record that run.
 
 ## Phase 6 - Adversarial review (scale to the diff)
 
@@ -290,7 +257,15 @@ Run ONE pass of a small multi-agent review over the committed diff (capped
 for speed). Two finder agents, in parallel: **correctness** (framework behaviour, and the
 design system plus a11y when the diff changes UI) and **test adequacy**. Give both the full
 `review-swarm` shared prompt: the runbook's "Ask (verbatim)" as THE ASK, its Non-goals or
-Follow-ups as NON-GOALS, the finding fields, the must-fix rule, and the `simplify` type. Send only critical or high findings to ONE skeptic agent each; a
+Follow-ups as NON-GOALS, the finding fields, the must-fix rule, and the `simplify` type.
+Always add this question to the correctness brief: "Does this make an always-failing or dormant
+call succeed, or act under a stored grant? Compare its actor guard with the sibling write
+endpoints in the same module, and name any check the old failure was hiding."
+When the ask makes a component load by name or from one source (a plugin called by name, a
+launcher, one config source), also add: "Capture the real output it hands on in a test run (a
+spawn prompt, a generated config, a command line). Does it still hold a filesystem path to code?"
+A path that names the right version today still ties the trigger to one machine.
+Send only critical or high findings to ONE skeptic agent each; a
 refuted one is dropped. Each agent gets 10 minutes; one that has not returned is dropped,
 with no retry. Adopt only MUST-FIX defects and `simplify` items outside the ask; list
 the rest in one line in Follow-ups. No re-review round: verify each fix with the Phase 5
@@ -321,105 +296,12 @@ probes (and any `tests/test_probe_*_tmp.py`) into a `wip` commit mid-review. So
 checkpoint-commit BEFORE launching the panel and, after it completes, require
 `git diff <checkpoint> --stat -- src tests` to list only your intended files before any
 gate, commit, or wip-squash (revert strays with `git checkout <checkpoint> -- <file>`).
-**A fresh `isolation: "worktree"` branches from `origin/<default-branch>` by default** - it does NOT
-contain your feature branch's committed changes, so an agent given that isolation would silently
-review main instead of your diff. So the DEFAULT is: checkpoint-commit, then run each agent in its
-own detached snapshot of that commit (`git worktree add --detach .claude/worktrees/review-<slug>-<agent>
-<checkpoint>`), with its FIRST action `EnterWorktree(path=<its snapshot>)`, never in the build
-worktree. A subagent starts in your working directory, and a prose "read-only" does not stop an
-agent that has a shell: read-only agents have been seen to check out another branch in the
-build worktree, or to commit, push and open a PR (see
-`review-swarm` on giving each leg a snapshot). The same rule covers every investigation agent this skill dispatches (recon, an
-impact map, a live-state read): a snapshot or a tool list with no Bash, Edit or Write, never the
-build worktree. After ANY panel or investigation agent returns, run the `review-swarm`
-**post-panel check** (branch, reflog and status here; each snapshot's reflog; a remote-branch
-diff against the pre-panel baseline; `gh pr list --author @me --state all` and a cross-repo
-`gh search prs --author @me`). An unexpected commit, push or PR is
-out-of-process work: review it before you keep it, and never merge it on the agent's word.
+
+**Running the panel.** Before you launch any review or investigation agent, read `references/phase-6-agent-panel.md` now. It holds the snapshot rule for each agent (a fresh `isolation: "worktree"` reviews main, not your diff), the post-panel check, the Agent-tool procedure for when a workflow-orchestration tool is not available (the usual case: it runs only after the user opts in, and Phase 6 is never skipped), the mutation brief and its traps, the fallback when agents cannot bind to their snapshots, and the own-virtualenv rule (the `.pth` rule) for each copy.
+
 Never run Phase 5/7 gates while a panel is still running.
 
-**When a workflow-orchestration tool is not available.** Such a tool may run only after the
-user opts in to multi-agent orchestration, so a quick build often cannot call it. Do not skip
-Phase 6. Run the same panel with the Agent tool instead:
-
-1. Checkpoint-commit the diff first.
-2. Launch one background Agent per dimension, in the same message, so they run in parallel.
-3. Bind each agent to its own snapshot from above (first action: `EnterWorktree(path=<snapshot>)`),
-   never the build worktree. Tell it it must not commit, push, open a PR, or touch a production
-   system. To probe behaviour, it copies the repo first (`cp -R <repo> "$(mktemp -d)/copy"`) and
-   mutates only the copy. A mutation it
-   leaves behind in the copy cannot reach your branch or an auto-commit. It also runs every
-   probe with `HOME` set to a sandbox dir, and it never sources or line-extracts an installer or
-   config script (for example a hook installer) outside that script's own test harness. A copied
-   line range from a file that has since shifted can hold the real side-effect code, which then
-   writes the live user config (for example, hook config merged into a live settings file). While a panel runs, a cheap
-   guard is a background watcher on the live config file's hash.
-4. Give the test-adequacy agent a mutation brief: delete or invert each guard in the copy. For
-   every guard whose removal no test catches, report whether THE ASK needs that guard: if yes, it
-   is a missing test (a defect); if no, it is a `simplify` finding to delete the guard, not a test
-   to add. Also have it force one suite to fail, and
-   check that the test runner exits non-zero and names that suite. **Run the unmutated control
-   first, and count no kill unless it passes:** a harness that fails for its own reason kills every
-   mutation. Changing `HOME` for the run hides the user's site-packages, so keep them on
-   `PYTHONPATH` (`python3 -c "import site; print(site.getusersitepackages())"`). For example,
-   a mutation re-run can print every mutation KILLED while its control failed with "No module named
-   pytest"; only the control proves the result.
-   **When the change deletes or writes data** (branches, records, files, money), the mutation
-   result must come from an EXECUTED run, never from reading the code. A Codex leg in its
-   read-only sandbox cannot create the copies, so its table comes back all `BLOCKED`; that is
-   no result. Run the mutation script yourself, or give Codex `--sandbox workspace-write` with
-   `-C` set to a scratch copy only, and run any long harness outside Codex's 600 s cap. Then
-   spot-check the two most important gates yourself: remove each in a copy and confirm a test
-   fails. A static pass that reads as all
-   `BLOCKED` can hide safety checks that no test covers; only the executed run shows them.
-   Two traps when reviewing an ops run-wrapper script:
-   - **Prove a new test against the previous commit's code.** Copy the old file into scratch
-     (`git show <prev>:<path> > <scratch>/<path>`), run the new tests with `PYTHONPATH=<scratch>`, and
-     expect red. A control made by deleting text from the script is invalid when it removes a string
-     the test searches for: the test then fails for the wrong reason.
-   - **A refusal test must check the guard's OWN message** and that the child never ran (a marker
-     file), not only the exit code. When a later check refuses the same case, deleting the guard
-     still gives a refusal, so an exit-code-only test stays green (a fake green). Pin the message, or record the redundancy as intentional.
-5. Treat an evidenced mutation result as self-verifying (it already shows a test that stays
-   green). Send a critical or high finding without that evidence to ONE skeptic agent before you
-   adopt it; a medium or lower finding gets no skeptic and follows the must-fix rule.
-6. After the agents return, run the post-panel check above, then remove the snapshots
-   (`git worktree remove --force <snapshot>`).
-
-If the agents cannot bind to their snapshots (their shells lock after `EnterWorktree`; see
-`review-swarm`, "If a leg cannot bind to its snapshot"), do not retry the bind. Launch the Phase 6
-agents WITHOUT `EnterWorktree`, under hard rules in the prompt: read-only on the build worktree, all
-probes and mutations only in `/tmp` copies, never commit, push, open a PR, or touch production.
-Checkpoint-commit first and record the remote-ref baseline, then run the post-panel check when they
-return. Give each agent its OWN plain copy of the checkpoint (`git archive <checkpoint> | tar -x -C
-/tmp/<run>/<agent>`, not a git worktree), and have it run commands through a `/tmp` script that
-`cd`s into that copy. After the panel, `git diff <checkpoint> --stat -- src tests` on the build
-tree must be empty.
-Give each copy its OWN virtualenv too (`uv venv` + `uv sync`, or a full copy of `.venv`), never a
-symlink to the build worktree's `.venv`. Running `uv run` in the copy re-syncs the editable install
-and rewrites the SHARED `site-packages/_editable_impl_<package>.pth` to the copy's `src`. The build
-tree's own interpreter then imports scratch code (gates, other agents, live read-only runs). After
-the panel, check that the `.pth` still names the build worktree's `src` (a mutation
-agent has caused this before; checksum the file to catch it).
-
-**A script that changes live host state gets an executed harness leg.** When the diff
-includes an ops script that edits crontabs, sudo-owned files, systemd units, or another user's home
-on a live host, static review is not enough. The test-adequacy agent (not an extra agent) also RUNS
-the script's real stages on a
-disposable Linux host that simulates the target: the happy path, rollback, an abort midway then
-rollback, a re-run after an interruption, every guard, and injected read failures. Simulate the
-target for real (its users, cron, sudo, flock, file modes); stub only external services (the CLI
-the script drives, your git host, cloud APIs, SaaS APIs). Choose the host in this order:
-1. An ephemeral spot / preemptible cloud VM in a sandbox project of your own (for example on
-   GCE: `--provisioning-model=SPOT`, `--max-run-duration=2h` and
-   `--instance-termination-action=DELETE`), so it deletes itself even if the session dies.
-   Delete it when the panel ends and confirm it is gone.
-2. A CI runner (a manually triggered workflow in a scratch repo).
-3. Local Docker, only when the operator agrees.
-
-Never the operator's laptop by default, and never the production host. Execution finds what
-reading cannot (a rollback-then-retry deadlock, a non-atomic backup, a gate that passes on a
-failed read), so re-run the harness after each fix.
+**An ops script that changes live host state** (it edits crontabs, sudo-owned files, systemd units, or another user's home on a live host): static review is not enough. Read `references/phase-6-live-host-harness.md` now.
 
 ## Phase 7 - Deploy (gates decide, not optimism)
 
@@ -486,9 +368,12 @@ clean build":
   security finding you cannot cleanly fix, or no way to run a required gate.
   Then do NOT deploy - stage everything, record why in the runbook, and hand off.
 - **The scope gate trips mid-build**: scouting reveals a migration, an authz/
-  tier-gate change, or a multi-subsystem blast radius. Stop and route to
+  tier-gate change, or a multi-subsystem reach. Stop and route to
   `dev-writing-plans` / `dev-brainstorming` - a quick build must not silently become a
   train.
+- **A cost-saving build misses its code budget or its pass mark** (Scope gate, "A
+  cost-saving build states its payoff and a code budget"). Do not start another
+  round: park it and ask the user for a go and a new budget.
 - **A genuine product, design, or trust decision surfaces** (e.g. a reviewer
   flags a trust-model choice). Escalate it rather than deciding unilaterally -
   that is a decision, not a gate.
@@ -530,42 +415,9 @@ pass to `dev-qa-verify` and let it decide. The quick build is done only when thi
 gate is green or explicitly recorded OWED. Update the deploy log's persona-pass line
 from OWED to DONE with what was verified.
 
-## Deploy contention - two dev-quick-build runs racing the same project
+## Deploy contention - two quick builds racing the same project
 
-The clobber risk is *tree omission*: flipping to an image whose git tree does not
-contain what production already serves. The **ancestor gate** (Phase 7, part of the
-build-then-deploy integrity checks - marker verify + Served-Image Integrity + ancestor; see the
-"integrity trio" in [build-and-ship-playbook.md](../../docs/build-and-ship-playbook.md))
-is the invariant that prevents it - and it must **abort, not echo** (a `set -e` script
-with `|| exit 1`, flip physically after the checks). Contention-specific operational
-rules:
-
-- Deploy from a pushed worktree branch, never through the shared main checkout.
-- `git fetch origin` immediately before the ancestor check + flip - that is the
-  serialization point. First to flip wins; the loser merges the winner (usually a
-  disjoint-file merge), reruns tests, rebuilds, flips. This terminates (each round
-  is forward progress, not wait-and-retry), so a race costs one rebuild round, never
-  a regression.
-- If `push origin HEAD:main` rejects, someone else pushed: merge `origin/main` and
-  push again - your deploy is already serving and its sha is in the merge.
-- If the PR merge is refused as `BLOCKED` with green CI, follow the `dev-deploy-safely`
-  section on a merge refused as BLOCKED with green CI: resolve any open review threads
-  (a review bot's included). Do not reach for an admin override first.
-- **Do not force-push to catch up.** If you rebased a branch that is already on
-  origin, a push would need `--force`. Instead, reset to the pushed tip
-  (`git reset --hard origin/<branch>` on a clean tree), then `git merge origin/main`,
-  re-run the gates, and push normally. A squash-merged PR makes the extra merge
-  commit invisible on `main`. Check that the merged tree equals the tested rebase
-  (`git diff --quiet <rebased-sha> HEAD`) before you push.
-- **A loop-back fix after a squash-merged PR goes on a FRESH branch from
-  `origin/main`** (`git checkout -b <new-branch> origin/main`). The old branch's
-  history is not an ancestor of the squash commit, so a second PR from it shows the
-  whole earlier diff again. Uncommitted edits carry over when the old tip's tree
-  equals `origin/main`; check with `git diff --quiet HEAD origin/main` first.
-- Known contention up front → prefer a deploy train (one session ships both branches).
-  Check whether another session is already deploying the project before Phase 7.
-- Files on a CMS host have no revisions: `dev-deploy-safely`'s pull-live-and-diff gate is the
-  equivalent invariant - live is the baseline, always.
+Read `references/deploy-contention.md` now, before Phase 7, when another build may be shipping the same project, when two quick builds race one project, when `git push origin HEAD:main` rejects, when a PR merge is refused as `BLOCKED` with green CI, or when a loop-back fix follows a squash-merged PR. It holds the ancestor-gate rules, the fetch-before-flip serialization, and the no-force-push recovery.
 
 ## Wrap
 

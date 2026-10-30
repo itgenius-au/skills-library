@@ -12,7 +12,8 @@
 #   --allow-none    pass a PR with no checks, only when its repo has no CI to run
 #   --wait-minutes  how long to wait for checks to register and finish (default 30)
 # Exit codes: 0 green, 1 red (a check did not succeed), 2 no checks registered,
-#   3 checks still running at the time limit, 4 usage error, gh error, conflict or behind.
+#   3 checks still running at the time limit, 4 usage error, gh error, conflict or behind, 5 network.
+# Exit 5 (NETWORK) means GitHub could not be reached after PR_CHECKS_NET_TRIES tries: the checks were not read.
 #
 # GREEN means all of these, seen on two polls in a row for the same head commit:
 #   - every check on the head commit finished with SUCCESS (SKIPPED, CANCELLED and every other
@@ -32,6 +33,13 @@
 # or protection cannot be read, it never assumes "none": it keeps waiting and says why.
 # A CI app outside GitHub Actions (a check app or commit status) is waited for only when it is
 # a required check, so make such a check required in the base branch's ruleset.
+#
+# A network error from gh (i/o timeout, TLS handshake timeout, connection reset or refused, no
+# such host, unexpected EOF, gh's "error connecting to" / "check your internet connection" for a
+# DNS failure, a Go client timeout, HTTP 502/503/504) is retried PR_CHECKS_NET_TRIES times (default 5),
+# PR_CHECKS_NET_SLEEP seconds apart (default 15). When every try fails it prints
+# "STOP: NETWORK: ...; checks not read" and exits 5, never "red". Any other gh error stops at once.
+# A network stop that reads as "checks are not green" sends you to debug a change that is fine.
 set -u
 
 GH=${PR_CHECKS_GH:-gh}
@@ -39,6 +47,9 @@ INTERVAL=${PR_CHECKS_INTERVAL:-20}
 NONE_GRACE=${PR_CHECKS_NONE_GRACE:-60}
 NONE_SETTLE=${PR_CHECKS_NONE_SETTLE:-60}
 WAIT_S=${PR_CHECKS_WAIT_S:-}   # test hook: overrides --wait-minutes with a limit in seconds
+NET_TRIES=${PR_CHECKS_NET_TRIES:-5}
+NET_SLEEP=${PR_CHECKS_NET_SLEEP:-15}
+NET_RE='i/o timeout|TLS handshake timeout|connection reset|connection refused|no such host|unexpected EOF|error connecting to|check your internet connection|context deadline exceeded|Client.Timeout exceeded|HTTP 50[234]'
 allow_none=0
 wait_minutes=30
 pr=""
@@ -195,21 +206,47 @@ else:
 PY
 )
 
-# gh_json FILE ARGS...: run gh and keep stdout in FILE; on failure print the error and exit 4.
-gh_json() {
-  local file=${1}
+# gh_try FILE ARGS...: run gh with stdout in FILE and stderr in $WORK/err. A network error is
+# retried (see the header). Returns 0 on success, 1 on any other error, 5 when every try hit a
+# network error.
+gh_try() {
+  local file=${1} n=1
   shift
-  if ! "$GH" "$@" > "$file" 2> "$WORK/err"; then
-    printf 'STOP: gh %s failed: %s\n' "$*" "$(cat "$WORK/err")" >&2
-    exit 4
-  fi
+  while :; do
+    "$GH" "$@" > "$file" 2> "$WORK/err" && return 0
+    grep -qE "$NET_RE" "$WORK/err" || return 1
+    [ "$n" -lt "$NET_TRIES" ] || return 5
+    printf 'gh network error, try %s of %s, again in %ss: %s\n' "$n" "$NET_TRIES" "$NET_SLEEP" \
+      "$(head -c 200 "$WORK/err" | tr '\n' ' ')" >&2
+    n=$((n + 1))
+    sleep "$NET_SLEEP"
+  done
+}
+
+# net_stop ARGS...: the gh call ARGS hit a network error on every try.
+net_stop() {
+  printf 'STOP: NETWORK: gh %s failed %s times: %s; checks not read\n' "$*" "$NET_TRIES" \
+    "$(head -c 300 "$WORK/err" | tr '\n' ' ')" >&2
+  exit 5
+}
+
+# gh_json FILE ARGS...: run gh and keep stdout in FILE; on failure print the error and exit 4
+# (5 after a network error on every try).
+gh_json() {
+  local file=${1} rc
+  shift
+  gh_try "$file" "$@"
+  rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  [ "$rc" -eq 5 ] && net_stop "$@"
+  printf 'STOP: gh %s failed: %s\n' "$*" "$(cat "$WORK/err")" >&2
+  exit 4
 }
 
 # Number of active workflows under .github/workflows/ (GitHub-managed ones such as Dependabot,
 # path dynamic/..., are not CI), or "unknown" when the lookup fails.
 repo_workflows() {
-  "$GH" api "repos/${1}/actions/workflows?per_page=100" > "$WORK/workflows.json" 2> /dev/null \
-    || { echo unknown; return; }
+  gh_try "$WORK/workflows.json" api "repos/${1}/actions/workflows?per_page=100" || { echo unknown; return; }
   python3 -c 'import json, sys
 d = json.load(open(sys.argv[1]))
 print(sum(1 for w in d.get("workflows") or []
@@ -234,7 +271,10 @@ while :; do
   read -r repo base sha <<< "$meta"
   if [ "$rules_for" != "$repo $base" ]; then
     # A private repo on a free plan has no rulesets: GitHub answers 403 "Upgrade to GitHub Pro".
-    if ! "$GH" api "repos/$repo/rules/branches/$base" > "$WORK/rules.json" 2> "$WORK/err"; then
+    gh_try "$WORK/rules.json" api "repos/$repo/rules/branches/$base"
+    rules_rc=$?
+    [ "$rules_rc" -eq 5 ] && net_stop api "repos/$repo/rules/branches/$base"
+    if [ "$rules_rc" -ne 0 ]; then
       if grep -q "Upgrade to GitHub Pro" "$WORK/err" "$WORK/rules.json" 2> /dev/null; then
         echo "[]" > "$WORK/rules.json"
       else

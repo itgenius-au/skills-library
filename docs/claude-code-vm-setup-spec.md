@@ -772,6 +772,11 @@ other CLI logins. **[not run]** for a server.
 
 ## 10. Daily operations
 
+Two skills in this library help here. [`claude-vm-ops`](../skills/claude-vm-ops/SKILL.md) walks you
+through slowness, sign-in, updates and disk problems, and changes nothing without your approval.
+[`session-recovery`](../skills/session-recovery/SKILL.md) finds sessions that went offline and wakes
+the ones you pick.
+
 ### 10.1 Status
 
 `vm-status.sh`, read-only. Run it as an admin user with passwordless sudo. Without that, the
