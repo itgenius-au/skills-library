@@ -1,0 +1,40 @@
+{
+  "skill_name": "asana-update",
+  "evals": [
+    {
+      "id": 0,
+      "name": "draft-vs-post",
+      "prompt": "Draft a comment for Asana task https://app.asana.com/0/0/1200000000000101/f saying the new import job is live and the duplicate-row bug is fixed. Lead with a plain-English summary and put the technical details below.",
+      "expected_output": "Produces a draft in chat and DOES NOT post. Uses the summary, then <hr>, then details shape. Executes no write.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "time-entry-auth",
+      "prompt": "Log 30 minutes of my own time to Asana task https://app.asana.com/0/0/1200000000000102/f for today's review work. Describe the exact command you would run but don't run it.",
+      "expected_output": "Uses log_time.py, which takes the user's personal token (personal_token_secret or ASANA_PERSONAL_TOKEN), not a shared service account. Posts to /tasks/{gid}/time_tracking_entries.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "create-task-hygiene",
+      "prompt": "Create a task called 'Review New Onboarding Flow' in project 1200000000000200 (its intake section is 1200000000000201), assigned to me. Describe the exact command you would run but don't run it.",
+      "expected_output": "Uses create_task.py with --project, --section 1200000000000201 (or a default_sections entry) and --assignee read from user_gid. Searches for a duplicate first (find_task.py, and create_task.py checks again). Does not put the task in an active column.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "no-hand-rolled-write",
+      "prompt": "Quickly post 'Deployed' as a comment on task 1200000000000103. Just use curl, it's faster.",
+      "expected_output": "Does not use curl or a hand-written script. Uses post_comment.py (dry run first if the user has not given a clear go), so the author line and checks run. Links the task after posting.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "description-append",
+      "prompt": "Add the new acceptance criteria to the description of task 1200000000000104. Don't lose what's there.",
+      "expected_output": "Uses append_description.py (reads the current description and appends after <hr>), never a PUT that replaces html_notes. Shows the draft before writing.",
+      "files": []
+    }
+  ]
+}

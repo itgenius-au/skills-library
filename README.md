@@ -89,6 +89,15 @@ Keep the repo, the machine, and the session clean.
 | `document-pdf` | Make a checked PDF from one Markdown source (reports, letters, agreements, evidence bundles), with a verify gate before you send anything. |
 | `morning-brief` | Build a daily brief HUD from your own sources. |
 
+### Team tools
+
+Write to the tools your team works in, with checks before each write.
+
+| Skill | What it does |
+|---|---|
+| `google-chat-update` | Post, reply, react, search and read Google Chat threads as a bot or as yourself, with a dry run, a duplicate-post check, and real mentions. |
+| `asana-update` | Write to Asana through checked scripts: comments (with an author line and real mentions), edits, attachments, task create with a duplicate check, field updates, completion, and time entries. |
+
 ### Guides
 
 | Guide | What it covers |
@@ -144,6 +153,16 @@ You only need the tools for the skills you use.
 - **`dev-deploy-safely`** gate scripts (`gate-merge.sh`, `pr-checks-green.sh`): the `gh` CLI and
   Python 3.
 - **`review-swarm`** private-repo export (`redacted_export.py`): Python 3.12 or later.
+- **`google-chat-update`**: Python 3 with `google-auth`, the `gcloud` CLI, and service account
+  keys stored in Google Secret Manager. Bot posts need a Google Chat app service account.
+  Reading, search, member lists, posting as yourself and reactions need a Google Workspace
+  admin service account with domain-wide delegation. Set it up in
+  `~/.claude/google-chat-update.config.json` (see the skill's `templates/` folder).
+  Its tests use `pytest`.
+- **`asana-update`**: Python 3 and an Asana token: a personal access token or a service
+  account token, as `ASANA_TOKEN` or in Google Secret Manager (then also the `gcloud` CLI).
+  Set it up in `~/.claude/asana-update.config.json` (see the skill's `templates/` folder).
+  Its tests use `pytest`.
 - **Build and deploy skills**: adapt the deploy examples (containers, static,
   file hosts) to your own stack. They call the review skills above for their
   review gates.

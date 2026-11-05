@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy to ~/.claude/google-chat-update.config.json and replace every your_ value. Delete the keys for an identity you do not have (for example the admin keys if you post as a bot only). Keys starting with _ are ignored.",
+  "gcp_project": "your_gcp_project",
+  "bot_sa_secret": "your_bot_sa_secret",
+  "bot_display_name": "your_bot_display_name",
+  "bot_user_id": "users/your_bot_user_id",
+  "admin_sa_secret": "your_admin_sa_secret",
+  "dwd_subject": "you@example.com",
+  "self_user_id": "users/your_self_user_id",
+  "default_write_identity": "bot",
+  "_optional": "Keys below are optional. Remove any you do not use.",
+  "bot_sa_project": "your_bot_sa_project",
+  "admin_sa_project": "your_admin_sa_project",
+  "gcloud_account": "your_gcloud_account@example.com",
+  "react_emoji": "👀",
+  "personal_oauth_secret": "your_personal_oauth_secret",
+  "personal_token_source": "your_personal_token_source",
+  "react_token_source": "your_react_token_source"
+}
