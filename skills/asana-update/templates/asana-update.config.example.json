@@ -1,0 +1,13 @@
+{
+  "workspace_gid": "your_workspace_gid",
+  "user_gid": "your_asana_user_gid",
+  "user_name": "Your Name",
+  "user_email": "you@example.com",
+  "token_secret": "your_secret_name",
+  "personal_token_secret": "",
+  "gcp_project": "your_gcp_project",
+  "gcloud_account": "",
+  "agent_user_gids": [],
+  "author_label": "Claude",
+  "default_sections": {}
+}

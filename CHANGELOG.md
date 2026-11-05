@@ -3,6 +3,12 @@
 This project uses semantic versions. A new or renamed skill is a minor bump. A fix or a docs
 change is a patch.
 
+## 1.4.0 - 2026-11-05
+
+- Added two team-tool skills: `google-chat-update` (post, reply, react, search and read
+  Google Chat) and `asana-update` (checked Asana writes: comments, edits, attachments,
+  tasks, fields and time). Each reads its own config file under `~/.claude/`.
+
 ## 1.3.1 - 2026-10-30
 
 - Fixed `redact_doc.py --check`: it no longer prints a sensitive value found in a file name.
